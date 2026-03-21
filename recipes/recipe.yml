@@ -15,7 +15,7 @@ modules:
   - type: os-release
     properties:
       ID: silver_panda
-      NAME: SilverPanda
+      NAME: silverpanda
       PRETTY_NAME: SilverPanda
       
   - type: dnf
