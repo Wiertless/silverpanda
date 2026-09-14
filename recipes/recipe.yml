@@ -24,8 +24,8 @@ modules:
         - https://pkgs.tailscale.com/stable/fedora/tailscale.repo
         - https://github.com/terrapkg/subatomic-repos/raw/main/terra.repo
       
-     # copr:
-      #  - atim/starship
+      copr:
+        - imput/helium
     install:
       packages:
       #  - micro
@@ -45,6 +45,7 @@ modules:
         - git-credential-libsecret
         - tailscale
         - zed
+        - helium-bin
     remove:
       packages:
         # example: removing firefox (in favor of the flatpak)
