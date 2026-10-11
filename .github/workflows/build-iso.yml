@@ -1,0 +1,81 @@
+name: Build SilverPanda ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Container image tag to install from (normally latest)
+        required: true
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-iso:
+    name: Build installable SilverPanda ISO
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      artifact-metadata: write
+    steps:
+      - name: Free disk space for the ISO build
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          preinstalled-runtimes: true
+
+      - name: Inspect the chosen SilverPanda image
+        id: image
+        shell: bash
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "Invalid container image tag: $IMAGE_TAG" >&2
+            exit 1
+          fi
+          image="ghcr.io/wiertless/silverpanda:${IMAGE_TAG}"
+          docker pull "$image"
+          fedora_version="$(docker run --rm --entrypoint /bin/sh "$image" -c '. /usr/lib/os-release; printf "%s" "$VERSION_ID"')"
+          if [[ ! "$fedora_version" =~ ^[0-9]+$ ]]; then
+            echo "Could not determine a numeric Fedora VERSION_ID from $image (got '$fedora_version')." >&2
+            exit 1
+          fi
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "fedora_version=$fedora_version" >> "$GITHUB_OUTPUT"
+          echo "Building ISO for $image using Fedora installer $fedora_version."
+
+      - name: Build ISO
+        id: build
+        uses: JasonN3/build-container-installer@v1.5.0
+        with:
+          arch: x86_64
+          image_repo: ghcr.io/wiertless
+          image_name: silverpanda
+          image_tag: ${{ steps.image.outputs.image_tag }}
+          image_signed: "true"
+          version: ${{ steps.image.outputs.fedora_version }}
+          variant: Silverblue
+          rootfs_size: "8"
+          enable_cache_dnf: "true"
+          enable_cache_skopeo: "true"
+          iso_name: silverpanda-${{ steps.image.outputs.image_tag }}-fedora-${{ steps.image.outputs.fedora_version }}-x86_64.iso
+
+      - name: Upload ISO and checksum
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: silverpanda-iso-${{ steps.image.outputs.image_tag }}-fedora-${{ steps.image.outputs.fedora_version }}
+          path: |
+            ${{ steps.build.outputs.iso_path }}/${{ steps.build.outputs.iso_name }}
+            ${{ steps.build.outputs.iso_path }}/${{ steps.build.outputs.iso_name }}-CHECKSUM
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

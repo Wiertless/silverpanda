@@ -1,0 +1,16 @@
+[Unit]
+Description=One-time offer to enable TPM2 unlock for Silverpanda's root LUKS2 volume
+After=local-fs.target systemd-ask-password-console.path
+Wants=systemd-ask-password-console.path
+ConditionPathExists=!/var/lib/silverpanda/luks-tpm-enrollment-attempted
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/silverpanda/enroll-root-luks-tpm.sh
+TimeoutStartSec=150
+StandardOutput=journal+console
+StandardError=journal+console
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
