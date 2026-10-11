@@ -39,6 +39,13 @@ modules:
         - libvirt-daemon-config-network
         - libvirt-daemon-kvm
         - libguestfs-tools
+        - libvirt-client
+        - dnsmasq
+        - edk2-ovmf
+        - cryptsetup
+        - mokutil
+        - tpm2-tss
+        - tpm2-tools
         - util-linux
         - ptyxis
         - fastfetch
@@ -54,6 +61,17 @@ modules:
         - firefox-langpacks # also remove firefox dependency (not required for all packages, this is a special case)
         - yelp
         - gnome-tour
+
+  # Install the TPM-backed keyring helper as image content. Its per-machine
+  # TPM enrollment and PAM changes are deliberately performed after install.
+  - type: dnf
+    repos:
+      cleanup: true
+      files:
+        - https://download.opensuse.org/repositories/home:/dmitrii.timoshenko/Fedora_%OS_VERSION%/home:dmitrii.timoshenko.repo
+    install:
+      packages:
+        - tpm-keyring-unlock
 
   - type: default-flatpaks
     configurations:
@@ -72,5 +90,23 @@ modules:
     files:
       - source: system   # copies `files/system/*` (* means everything inside it) into your image's root folder `/`
         destination: /
+
+  # Enable modern libvirt daemons via socket activation. Do not grant every
+  # local user libvirt-group access; system-socket polkit remains the gate.
+  - type: systemd
+    system:
+      enabled:
+        - virtqemud.service
+        - virtqemud.socket
+        - virtnetworkd.socket
+        - virtstoraged.socket
+        - virtlogd.socket
+        - virtlockd.socket
+        - silverpanda-libvirt-network.service
+        - silverpanda-firstboot-luks-tpm.service
+
+  # files/system/etc/dracut.conf.d enables the TPM2 dracut module. Rebuild the
+  # initramfs in the image so it can use TPM2 tokens before mounting root.
+  - type: initramfs
 
   - type: signing # this sets up the proper policy & signing files for signed images to work fully
