@@ -8,6 +8,11 @@ on:
         required: true
         default: latest
         type: string
+      fedora_version:
+        description: Fedora major version used by this SilverPanda image (update when changing the base Fedora release)
+        required: true
+        default: "44"
+        type: string
 
 permissions:
   contents: read
@@ -31,27 +36,25 @@ jobs:
           docker-images: true
           preinstalled-runtimes: true
 
-      - name: Inspect the chosen SilverPanda image
+      - name: Validate ISO inputs
         id: image
         shell: bash
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
+          FEDORA_VERSION: ${{ inputs.fedora_version }}
         run: |
           set -euo pipefail
           if [[ ! "$IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
             echo "Invalid container image tag: $IMAGE_TAG" >&2
             exit 1
           fi
-          image="ghcr.io/wiertless/silverpanda:${IMAGE_TAG}"
-          docker pull "$image"
-          fedora_version="$(docker run --rm --entrypoint /bin/sh "$image" -c '. /usr/lib/os-release; printf "%s" "$VERSION_ID"')"
-          if [[ ! "$fedora_version" =~ ^[0-9]+$ ]]; then
-            echo "Could not determine a numeric Fedora VERSION_ID from $image (got '$fedora_version')." >&2
+          if [[ ! "$FEDORA_VERSION" =~ ^[0-9]+$ ]]; then
+            echo "Fedora version must be a numeric major version (got '$FEDORA_VERSION')." >&2
             exit 1
           fi
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-          echo "fedora_version=$fedora_version" >> "$GITHUB_OUTPUT"
-          echo "Building ISO for $image using Fedora installer $fedora_version."
+          echo "fedora_version=$FEDORA_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building ISO for ghcr.io/wiertless/silverpanda:${IMAGE_TAG} using Fedora installer ${FEDORA_VERSION}."
 
       - name: Build ISO
         id: build
