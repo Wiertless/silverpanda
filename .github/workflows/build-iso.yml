@@ -55,7 +55,7 @@ jobs:
 
       - name: Build ISO
         id: build
-        uses: JasonN3/build-container-installer@v1.5.0
+        uses: JasonN3/build-container-installer@1c2afd1bde337ae07a1ce0a7edbda729d3e4d55c # upstream main as of 2026-09-25
         with:
           arch: x86_64
           image_repo: ghcr.io/wiertless
@@ -63,8 +63,9 @@ jobs:
           image_tag: ${{ steps.image.outputs.image_tag }}
           image_signed: "true"
           version: ${{ steps.image.outputs.fedora_version }}
-          variant: Silverblue
-          rootfs_size: "8"
+          variant: silverblue
+          # Work around upstream action's declared-but-unforwarded rootfs_size input.
+          make_target: ROOTFS_SIZE=8
           enable_cache_dnf: "true"
           enable_cache_skopeo: "true"
           iso_name: silverpanda-${{ steps.image.outputs.image_tag }}-fedora-${{ steps.image.outputs.fedora_version }}-x86_64.iso
