@@ -29,7 +29,7 @@ args=(--init --network=host --userns=keep-id --user "$(id -u):$(id -g)"
       -v "$state:/home/node/.openclaw:Z")
 if [[ "$1" == start ]]; then
     exec podman run -d --name "$name" "${args[@]}" "$image" \
-        node dist/index.js gateway --bind loopback --port 18789
+        node dist/index.js gateway --bind loopback --port 18789 --replace
 fi
 tty_args=()
 if [[ -t 0 && -t 1 ]]; then
