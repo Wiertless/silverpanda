@@ -1,0 +1,19 @@
+[Unit]
+Description=Local AMD NPU inference server (FastFlowLM / XRT)
+ConditionPathExists=/dev/accel/accel0
+
+[Service]
+Type=simple
+Environment=FLM_MODEL=qwen3.5:4b
+Environment=FLM_CONTEXT=32768
+EnvironmentFile=-%h/.config/flm/server.env
+ExecStart=/usr/bin/flm-xrt serve ${FLM_MODEL} --host 127.0.0.1 --port 52625 --ctx-len ${FLM_CONTEXT} --cors 0
+Restart=on-failure
+RestartSec=10
+LimitMEMLOCK=infinity
+NoNewPrivileges=yes
+PrivateTmp=yes
+UMask=0077
+
+[Install]
+WantedBy=default.target

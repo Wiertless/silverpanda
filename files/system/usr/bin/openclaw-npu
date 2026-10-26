@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+image="${OPENCLAW_NPU_IMAGE:-ghcr.io/openclaw/openclaw:latest}"
+name="silverpanda-openclaw"
+state="${XDG_DATA_HOME:-$HOME/.local/share}/openclaw-npu"
+
+if (( EUID == 0 )); then
+    echo "Run as your normal user, not root." >&2
+    exit 1
+fi
+command -v podman >/dev/null
+case "${1:-}" in
+    pull) exec podman pull "$image" ;;
+    stop) exec podman stop "$name" ;;
+    logs) exec podman logs -f "$name" ;;
+    status) exec podman inspect --format '{{.State.Status}}' "$name" ;;
+esac
+if (( $# == 0 )); then
+    echo "Usage: openclaw-npu {pull|onboard|start|stop|logs|status|<CLI arguments...>}" >&2
+    exit 2
+fi
+mkdir -p -- "$state"
+chmod 0700 -- "$state"
+args=(--init --network=host --userns=keep-id --user "$(id -u):$(id -g)"
+      --cap-drop=all --security-opt=no-new-privileges
+      -e HOME=/home/node -e OPENCLAW_NO_RESPAWN=1
+      -e NPM_CONFIG_CACHE=/home/node/.openclaw/.npm
+      -v "$state:/home/node/.openclaw:Z")
+if [[ "$1" == start ]]; then
+    exec podman run -d --name "$name" "${args[@]}" "$image" \
+        node dist/index.js gateway --bind loopback --port 18789
+fi
+tty_args=()
+if [[ -t 0 && -t 1 ]]; then
+    tty_args=(-it)
+fi
+exec podman run --rm "${tty_args[@]}" "${args[@]}" "$image" \
+    node dist/index.js "$@"
