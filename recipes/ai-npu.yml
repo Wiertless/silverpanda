@@ -1,0 +1,13 @@
+# AMD XDNA2 userspace only. Keep the signed Fedora kernel driver.
+modules:
+  - type: dnf
+    repos:
+      cleanup: true
+      copr:
+        - abn/amd-npu
+    install:
+      packages:
+        - fastflowlm-xrt
+        - linux-firmware
+        - podman
+        - catatonit

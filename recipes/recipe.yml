@@ -73,6 +73,9 @@ modules:
       packages:
         - tpm-keyring-unlock
 
+  # Local inference stack; service remains opt-in per user.
+  - from-file: ai-npu.yml
+
   - type: default-flatpaks
     configurations:
       - notify: true # Send notification after install/uninstall is finished (true/false)
