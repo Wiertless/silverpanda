@@ -1,2 +1,0 @@
-# AMD accelerator access
-SUBSYSTEM=="accel", KERNEL=="accel[0-9]*", ATTRS{vendor}=="0x1022", GROUP="render", MODE="0660", TAG+="uaccess"
