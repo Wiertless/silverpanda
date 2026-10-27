@@ -58,7 +58,7 @@ jobs:
 
       - name: Build ISO
         id: build
-        uses: JasonN3/build-container-installer@1c2afd1bde337ae07a1ce0a7edbda729d3e4d55c # upstream main as of 2026-09-25
+        uses: JasonN3/build-container-installer@21ba332383d8499c2b6e3ba26cef86052d81f847 # upstream main as of 2026-09-25
         with:
           arch: x86_64
           image_repo: ghcr.io/wiertless
