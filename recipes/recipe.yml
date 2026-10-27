@@ -53,6 +53,7 @@ modules:
         - tailscale
         - zed
         - helium-bin
+        - pam-devel
     remove:
       packages:
         # example: removing firefox (in favor of the flatpak)
