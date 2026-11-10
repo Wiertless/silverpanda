@@ -69,7 +69,7 @@ modules:
     repos:
       cleanup: true
       files:
-        - https://download.opensuse.org/repositories/home:/dmitrii.timoshenko/Fedora_%OS_VERSION%/home:dmitrii.timoshenko.repo
+        - https://download.opensuse.org/repositories/home:/dmitrii.timoshenko/Fedora_44/home:dmitrii.timoshenko.repo
     install:
       packages:
         - tpm-keyring-unlock
