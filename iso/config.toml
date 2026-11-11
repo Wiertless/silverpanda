@@ -1,0 +1,21 @@
+# bootc-image-builder config for the SilverPanda installer ISO.
+#
+# Providing a kickstart is what keeps the installer interactive. Without one,
+# bootc-image-builder generates a fully unattended kickstart that runs
+# `clearpart --all` (erases every disk) with no prompts and no encryption.
+# This kickstart only selects the graphical UI; Anaconda then asks for the
+# disk layout (including LUKS encryption), language and time zone. Creating a
+# user there is optional; GNOME Initial Setup asks on first boot otherwise.
+
+[customizations.installer.modules]
+# Off by default for bootc installer ISOs; enable the language and time zone
+# screens.
+enable = [
+  "org.fedoraproject.Anaconda.Modules.Localization",
+  "org.fedoraproject.Anaconda.Modules.Timezone",
+]
+
+[customizations.installer.kickstart]
+contents = """
+graphical
+"""

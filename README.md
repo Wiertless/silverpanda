@@ -36,7 +36,7 @@ The `latest` tag always points to the newest build. Each build uses the Fedora m
 
 ## ISO
 
-A manual GitHub Actions workflow now generates a SilverPanda installer ISO and uploads it with a checksum as a temporary workflow artifact. See [Build an installer ISO](#build-an-installer-iso) below. For local ISO builds, follow the [BlueBuild ISO guide](https://blue-build.org/how-to/generate-iso/).
+A manual GitHub Actions workflow generates a SilverPanda installer ISO with [bootc-image-builder](https://github.com/osbuild/image-builder) and uploads it with a checksum as a temporary workflow artifact. See [Build an installer ISO](#build-an-installer-iso) below.
 
 ## Verification
 
@@ -64,12 +64,36 @@ SilverPanda enables libvirt's modular systemd sockets and ensures that the packa
 
 ## Build an installer ISO
 
-> [!CAUTION]
-> The ISO workflow is currently broken. Its upstream action, `JasonN3/build-container-installer`, was archived in October 2026 after Fedora moved from Lorax to Kiwi, and it can no longer build images ([upstream notice](https://github.com/JasonN3/build-container-installer/issues/215)). BlueBuild's `generate-iso` uses the same tool. Until the workflow is moved to another builder, install stock Fedora Silverblue and rebase as described in [Installation](#installation).
+After the image has successfully built and been published to GHCR, go to **GitHub → Actions → Build SilverPanda ISO → Run workflow** and choose an image tag (normally `latest`). The workflow pulls the image, reads its Fedora version from `/usr/lib/os-release`, builds an x86_64 Anaconda installer ISO with [bootc-image-builder](https://github.com/osbuild/image-builder), and uploads the ISO plus a SHA-256 checksum as a workflow artifact for seven days.
 
-After the image has successfully built and been published to GHCR, go to **GitHub → Actions → Build SilverPanda ISO → Run workflow**. Choose an image tag (normally `latest`) and leave the Fedora version empty. The workflow reads the Fedora version from the image's labels (or uses the version you enter), builds an x86_64 Silverblue-style installer ISO with the published image as its payload, and uploads the ISO plus its checksum as a workflow artifact for seven days.
+The installer is interactive: it asks for language, time zone and disk layout (choose **Encrypt my data** there to get the LUKS2 root that the TPM first-boot offer expects). You can create your user account in the installer, or skip it and GNOME Initial Setup will ask on first boot. The settings live in [`iso/config.toml`](iso/config.toml). Don't remove its kickstart section: without one, bootc-image-builder makes an unattended installer that erases every disk.
 
-The ISO job runs manually so normal daily image builds do not spend the extra time and disk space needed for installer creation. If the ISO job fails, open its log and look for the first error in the **Build ISO** step. The workflow intentionally stops if the image is not accessible from GitHub-hosted runners or its Fedora version cannot be detected.
+After installing from the ISO, switch to the signed image once so updates are signature-checked, then reboot:
+
+```bash
+sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/wiertless/silverpanda:latest
+```
+
+Notes:
+
+- bootc-image-builder finds Fedora's installer packages from the image's os-release `ID`, so the recipe keeps `ID=fedora` (the name still shows as SilverPanda). The workflow stops early if the ID is anything else.
+- To try an ISO from a branch before merging, use that branch's image tag, `br-<branch name with / replaced by _>-<fedora version>`, e.g. `br-my-feature-45`.
+- To build locally, pull the image and then run bootc-image-builder:
+
+  ```bash
+  sudo podman pull ghcr.io/wiertless/silverpanda:latest
+  ```
+
+  ```bash
+  sudo podman run --rm -it --privileged --pull=newer \
+    --security-opt label=type:unconfined_t \
+    -v ./iso/config.toml:/config.toml:ro -v ./output:/output \
+    -v /var/lib/containers/storage:/var/lib/containers/storage \
+    quay.io/centos-bootc/bootc-image-builder:latest \
+    --type anaconda-iso --rootfs btrfs ghcr.io/wiertless/silverpanda:latest
+  ```
+
+  The ISO is written to `output/bootiso/install.iso`.
 
 ## GNOME Keyring auto-unlock (optional)
 

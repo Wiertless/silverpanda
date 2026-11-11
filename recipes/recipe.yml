@@ -14,9 +14,10 @@ image-version: 45
 # module configuration, executed in order
 # you can include multiple instances of the same module
 modules:
+  # Keep the base ID (fedora): installer/ISO tooling looks up Fedora package
+  # repos by os-release ID, and a custom ID breaks ISO builds.
   - type: os-release
     properties:
-      ID: silver_panda
       NAME: silverpanda
       PRETTY_NAME: SilverPanda
 

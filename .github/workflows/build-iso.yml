@@ -8,14 +8,14 @@ on:
         required: true
         default: latest
         type: string
-      fedora_version:
-        description: Fedora major version override (leave empty to detect it from the image)
-        required: false
-        default: ""
-        type: string
 
 permissions:
   contents: read
+
+env:
+  IMAGE_REPO: ghcr.io/wiertless/silverpanda
+  # Maintained successor to the archived JasonN3/build-container-installer.
+  BIB_IMAGE: quay.io/centos-bootc/bootc-image-builder:latest
 
 jobs:
   build-iso:
@@ -24,7 +24,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-      artifact-metadata: write
     steps:
       - name: Free disk space for the ISO build
         uses: jlumbroso/free-disk-space@v2.0.0
@@ -36,73 +35,76 @@ jobs:
           docker-images: true
           preinstalled-runtimes: true
 
-      - name: Validate ISO inputs
+      - name: Check out ISO config
+        uses: actions/checkout@v5
+
+      - name: Validate inputs and pull the image
         id: image
         shell: bash
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
-          FEDORA_VERSION: ${{ inputs.fedora_version }}
         run: |
           set -euo pipefail
           if [[ ! "$IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
             echo "Invalid container image tag: $IMAGE_TAG" >&2
             exit 1
           fi
-          if [[ -z "$FEDORA_VERSION" ]]; then
-            # Detect the Fedora release from the published image's labels:
-            # the kernel version (ostree.linux, e.g. 6.17.7-300.fc45.x86_64)
-            # first, then the OCI version label (e.g. 45.20261110).
-            labels=$(skopeo inspect --retry-times 3 --no-tags \
-              "docker://ghcr.io/wiertless/silverpanda:${IMAGE_TAG}" | jq -c '.Labels // {}')
-            kernel=$(jq -r '."ostree.linux" // ""' <<< "$labels")
-            if [[ "$kernel" =~ \.fc([0-9]+)\. ]]; then
-              FEDORA_VERSION=${BASH_REMATCH[1]}
-            else
-              oci_version=$(jq -r '."org.opencontainers.image.version" // ""' <<< "$labels")
-              if [[ "$oci_version" =~ ^([0-9]+)(\.|$) ]]; then
-                FEDORA_VERSION=${BASH_REMATCH[1]}
-              fi
-            fi
-            if [[ -z "$FEDORA_VERSION" ]]; then
-              echo "Could not detect the Fedora version of ghcr.io/wiertless/silverpanda:${IMAGE_TAG}; set the fedora_version input." >&2
-              exit 1
-            fi
-            echo "Detected Fedora ${FEDORA_VERSION} from the image labels."
-          fi
-          if [[ ! "$FEDORA_VERSION" =~ ^[0-9]+$ ]]; then
-            echo "Fedora version must be a numeric major version (got '$FEDORA_VERSION')." >&2
+          image_ref="${IMAGE_REPO}:${IMAGE_TAG}"
+
+          # bootc-image-builder only reads images from local container storage.
+          sudo podman pull --retry 3 "$image_ref"
+
+          os_release=$(sudo podman run --rm --entrypoint cat "$image_ref" /usr/lib/os-release)
+          os_id=$(sed -n 's/^ID=//p' <<< "$os_release" | tr -d '"')
+          fedora_version=$(sed -n 's/^VERSION_ID=//p' <<< "$os_release" | tr -d '"')
+          if [[ "$os_id" != fedora ]]; then
+            echo "os-release ID is '$os_id', not 'fedora'; bootc-image-builder cannot find Fedora's installer packages for it." >&2
             exit 1
           fi
-          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-          echo "fedora_version=$FEDORA_VERSION" >> "$GITHUB_OUTPUT"
-          echo "Building ISO for ghcr.io/wiertless/silverpanda:${IMAGE_TAG} using Fedora installer ${FEDORA_VERSION}."
+          if [[ ! "$fedora_version" =~ ^[0-9]+$ ]]; then
+            echo "Could not read a Fedora version from the image (got '$fedora_version')." >&2
+            exit 1
+          fi
+
+          iso_name="silverpanda-${IMAGE_TAG}-fedora-${fedora_version}-x86_64.iso"
+          {
+            echo "image_ref=$image_ref"
+            echo "image_tag=$IMAGE_TAG"
+            echo "fedora_version=$fedora_version"
+            echo "iso_name=$iso_name"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building ${iso_name} from ${image_ref}."
 
       - name: Build ISO
-        id: build
-        # Upstream archived this action in Oct 2026 (Fedora moved from Lorax to Kiwi)
-        # and it can no longer build ISOs. Needs replacing; see README.
-        uses: JasonN3/build-container-installer@21ba332383d8499c2b6e3ba26cef86052d81f847 # final upstream commit
-        with:
-          arch: x86_64
-          image_repo: ghcr.io/wiertless
-          image_name: silverpanda
-          image_tag: ${{ steps.image.outputs.image_tag }}
-          image_signed: "true"
-          version: ${{ steps.image.outputs.fedora_version }}
-          variant: silverblue
-          # Work around upstream action's declared-but-unforwarded rootfs_size input.
-          make_target: ROOTFS_SIZE=8
-          enable_cache_dnf: "true"
-          enable_cache_skopeo: "true"
-          iso_name: silverpanda-${{ steps.image.outputs.image_tag }}-fedora-${{ steps.image.outputs.fedora_version }}-x86_64.iso
+        shell: bash
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
+          ISO_NAME: ${{ steps.image.outputs.iso_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          sudo podman run --rm --privileged --pull=newer \
+            --security-opt label=type:unconfined_t \
+            -v "$GITHUB_WORKSPACE/iso/config.toml:/config.toml:ro" \
+            -v "$GITHUB_WORKSPACE/output:/output" \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            "$BIB_IMAGE" \
+            --type anaconda-iso \
+            --rootfs btrfs \
+            "$IMAGE_REF"
+
+          sudo chown -R "$(id -u):$(id -g)" output
+          mv output/bootiso/install.iso "output/${ISO_NAME}"
+          (cd output && sha256sum "$ISO_NAME" > "${ISO_NAME}-CHECKSUM")
+          ls -lh output
 
       - name: Upload ISO and checksum
         uses: actions/upload-artifact@v7.0.2
         with:
           name: silverpanda-iso-${{ steps.image.outputs.image_tag }}-fedora-${{ steps.image.outputs.fedora_version }}
           path: |
-            ${{ steps.build.outputs.iso_path }}/${{ steps.build.outputs.iso_name }}
-            ${{ steps.build.outputs.iso_path }}/${{ steps.build.outputs.iso_name }}-CHECKSUM
+            output/${{ steps.image.outputs.iso_name }}
+            output/${{ steps.image.outputs.iso_name }}-CHECKSUM
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
