@@ -89,7 +89,7 @@ Notes:
     --security-opt label=type:unconfined_t \
     -v ./iso/config.toml:/config.toml:ro -v ./output:/output \
     -v /var/lib/containers/storage:/var/lib/containers/storage \
-    quay.io/centos-bootc/bootc-image-builder:latest \
+    ghcr.io/osbuild/bootc-image-builder:v90.0.0 \
     --type anaconda-iso --rootfs btrfs ghcr.io/wiertless/silverpanda:latest
   ```
 

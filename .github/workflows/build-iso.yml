@@ -15,7 +15,10 @@ permissions:
 env:
   IMAGE_REPO: ghcr.io/wiertless/silverpanda
   # Maintained successor to the archived JasonN3/build-container-installer.
-  BIB_IMAGE: quay.io/centos-bootc/bootc-image-builder:latest
+  # Use upstream's own build (Fedora-based, from current source) rather than
+  # quay.io/centos-bootc/bootc-image-builder, which packages the CentOS Stream
+  # RPM and lags behind on new Fedora releases. Bump the tag deliberately.
+  BIB_IMAGE: ghcr.io/osbuild/bootc-image-builder:v90.0.0
 
 jobs:
   build-iso:
@@ -99,6 +102,8 @@ jobs:
             -v "$GITHUB_WORKSPACE/output:/output" \
             -v /var/lib/containers/storage:/var/lib/containers/storage \
             "$BIB_IMAGE" \
+            --log-level info \
+            --progress verbose \
             --type anaconda-iso \
             --rootfs btrfs \
             "$IMAGE_REF"
