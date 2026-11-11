@@ -53,7 +53,7 @@ jobs:
           df -h /
 
       - name: Check out ISO config
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Validate inputs and pull the image
         id: image
