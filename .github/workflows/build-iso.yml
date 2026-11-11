@@ -69,7 +69,15 @@ jobs:
           image_ref="${IMAGE_REPO}:${IMAGE_TAG}"
 
           # bootc-image-builder only reads images from local container storage.
-          sudo podman pull --retry 3 "$image_ref"
+          # (podman 4.x on ubuntu-24.04 has no --retry flag.)
+          for attempt in 1 2 3; do
+            sudo podman pull "$image_ref" && break
+            if (( attempt == 3 )); then
+              echo "Failed to pull $image_ref" >&2
+              exit 1
+            fi
+            sleep $(( attempt * 15 ))
+          done
 
           os_release=$(sudo podman run --rm --entrypoint cat "$image_ref" /usr/lib/os-release)
           os_id=$(sed -n 's/^ID=//p' <<< "$os_release" | tr -d '"')
