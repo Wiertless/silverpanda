@@ -1,0 +1,23 @@
+name: lint
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run ShellCheck on image scripts
+        run: |
+          set -euo pipefail
+          mapfile -t scripts < <(git ls-files 'files/**/*.sh')
+          if (( ${#scripts[@]} == 0 )); then
+            echo "No shell scripts found."
+            exit 0
+          fi
+          shellcheck --severity=warning "${scripts[@]}"

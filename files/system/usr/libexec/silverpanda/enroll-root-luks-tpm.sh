@@ -83,8 +83,11 @@ if [[ "$has_tpm_token" != true ]]; then
     log 'passphrase prompt was cancelled or timed out; no LUKS changes were made.'
     exit 1
   }
-  # Pass the secret on stdin only. It is not put in argv, the environment, or a file.
-  if ! printf '%s\n' "$passphrase" | /usr/bin/systemd-cryptenroll \
+  # systemd-cryptenroll ignores piped stdin (it falls back to the ask-password
+  # agent and would prompt a second time). $PASSWORD is its documented input;
+  # it is erased from the process environment as soon as it is read, and is
+  # never put in argv or a file.
+  if ! PASSWORD=$passphrase /usr/bin/systemd-cryptenroll \
       --tpm2-device=auto --tpm2-pcrs=7 "$luks_device"; then
     unset passphrase
     log 'systemd-cryptenroll failed; the existing passphrase remains the recovery path.'

@@ -9,9 +9,9 @@ on:
         default: latest
         type: string
       fedora_version:
-        description: Fedora major version used by this SilverPanda image (update when changing the base Fedora release)
-        required: true
-        default: "44"
+        description: Fedora major version override (leave empty to detect it from the image)
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -47,6 +47,27 @@ jobs:
           if [[ ! "$IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
             echo "Invalid container image tag: $IMAGE_TAG" >&2
             exit 1
+          fi
+          if [[ -z "$FEDORA_VERSION" ]]; then
+            # Detect the Fedora release from the published image's labels:
+            # the kernel version (ostree.linux, e.g. 6.17.7-300.fc45.x86_64)
+            # first, then the OCI version label (e.g. 45.20261110).
+            labels=$(skopeo inspect --retry-times 3 --no-tags \
+              "docker://ghcr.io/wiertless/silverpanda:${IMAGE_TAG}" | jq -c '.Labels // {}')
+            kernel=$(jq -r '."ostree.linux" // ""' <<< "$labels")
+            if [[ "$kernel" =~ \.fc([0-9]+)\. ]]; then
+              FEDORA_VERSION=${BASH_REMATCH[1]}
+            else
+              oci_version=$(jq -r '."org.opencontainers.image.version" // ""' <<< "$labels")
+              if [[ "$oci_version" =~ ^([0-9]+)(\.|$) ]]; then
+                FEDORA_VERSION=${BASH_REMATCH[1]}
+              fi
+            fi
+            if [[ -z "$FEDORA_VERSION" ]]; then
+              echo "Could not detect the Fedora version of ghcr.io/wiertless/silverpanda:${IMAGE_TAG}; set the fedora_version input." >&2
+              exit 1
+            fi
+            echo "Detected Fedora ${FEDORA_VERSION} from the image labels."
           fi
           if [[ ! "$FEDORA_VERSION" =~ ^[0-9]+$ ]]; then
             echo "Fedora version must be a numeric major version (got '$FEDORA_VERSION')." >&2
