@@ -25,15 +25,25 @@ jobs:
       contents: read
       packages: read
     steps:
+      # Done inline instead of with jlumbroso/free-disk-space: that action was
+      # transferred to lumbroso-commons in Nov 2026 and GitHub intermittently
+      # fails to resolve the old name, which aborts the run before any job
+      # starts (startup_failure, no logs).
       - name: Free disk space for the ISO build
-        uses: jlumbroso/free-disk-space@v2.0.0
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          preinstalled-runtimes: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc /usr/local/.ghcup \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium \
+            /usr/share/swift \
+            /opt/hostedtoolcache
+          sudo docker image prune --all --force > /dev/null || true
+          df -h /
 
       - name: Check out ISO config
         uses: actions/checkout@v5
