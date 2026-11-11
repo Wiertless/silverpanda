@@ -1,12 +1,16 @@
 # SilverPanda &nbsp; [![bluebuild build badge](https://github.com/wiertless/silverpanda/actions/workflows/build.yml/badge.svg)](https://github.com/wiertless/silverpanda/actions/workflows/build.yml)
 
-See the [BlueBuild docs](https://blue-build.org/how-to/setup/) for quick setup instructions for setting up your own repository based on this template.
+A personal [Fedora Silverblue](https://fedoraproject.org/atomic-desktops/silverblue/) image built with [BlueBuild](https://blue-build.org/) on top of `ghcr.io/ublue-os/silverblue-main`. On top of the base image it adds:
 
-After setup, it is recommended you update this README to describe your custom image.
+- **Virtualization:** QEMU/KVM, libvirt (modular daemons) and virt-manager, with the default NAT network set up automatically
+- **Disk encryption:** a one-time first-boot offer to unlock the LUKS2 root with the TPM
+- **AMD NPU:** XDNA2 userspace (FastFlowLM/XRT) plus device permissions and memlock limits for it
+- **Apps and tools:** fish (default shell for new users), Tailscale, Zed, Helium, Ptyxis, fastfetch, and LibreWolf, Loupe, Pika Backup and G4Music as Flatpaks
+- **Removed:** Firefox, Yelp, GNOME Tour
 
 ## Installation
 
-> [!WARNING]  
+> [!WARNING]
 > [This is an experimental feature](https://www.fedoraproject.org/wiki/Changes/OstreeNativeContainerStable), try at your own discretion.
 
 To rebase an existing atomic Fedora installation to the latest build:
@@ -28,11 +32,11 @@ To rebase an existing atomic Fedora installation to the latest build:
   systemctl reboot
   ```
 
-The `latest` tag will automatically point to the latest build. That build will still always use the Fedora version specified in `recipe.yml`, so you won't get accidentally updated to the next major version.
+The `latest` tag always points to the newest build. Each build uses the Fedora major version pinned by `image-version` in `recipes/recipe.yml`, so a new Fedora release only arrives when that value is bumped.
 
 ## ISO
 
-A manual GitHub Actions workflow now generates a SilverPanda installer ISO and uploads it with a checksum as a temporary workflow artifact. See [Build an installer ISO](#build-an-installer-iso) below. For local ISO builds, follow the [BlueBuild ISO guide](https://blue-build.org/how-to/generate-iso/).
+A manual GitHub Actions workflow generates a SilverPanda installer ISO with [bootc-image-builder](https://github.com/osbuild/image-builder) and uploads it with a checksum as a temporary workflow artifact. See [Build an installer ISO](#build-an-installer-iso) below.
 
 ## Verification
 
@@ -46,7 +50,7 @@ cosign verify --key cosign.pub ghcr.io/wiertless/silverpanda
 
 SilverPanda includes a one-time first-boot offer to enable TPM2 unlocking for the LUKS2 container backing `/`. It only proceeds when Secure Boot is enabled and a TPM2 resource-manager device is present. At the prompt, type `ENROLL` and enter the existing LUKS passphrase. The script adds a TPM keyslot without wiping existing passphrases or recovery keys, then stages a per-device `rd.luks.options=UUID=tpm2-device=auto` kernel argument. Reboot is required before that argument takes effect.
 
-The enrollment is bound to PCR 7 (Secure Boot policy). That is more update-tolerant than binding to unstable bootloader/kernel measurements, but it does not measure the complete boot chain. Keep a tested LUKS passphrase or recovery key and verify multiple reboots before relying on TPM unlock. The service makes one automatic attempt; after a timeout, skip, or error, run the helper manually from a terminal. This helper stages `rpm-ostree` kernel arguments and requires a reboot to take effect:
+The enrollment is bound to PCR 7 (Secure Boot policy). That survives kernel and bootloader updates, but on Fedora the initramfs and kernel command line are **not** covered by PCR 7, and both sit unencrypted in `/boot`. Someone with physical access can change them and the TPM will still release the key. In practice this protects a disk removed from the machine, not a stolen laptop. For stronger protection, re-enroll with a PIN (`systemd-cryptenroll --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=7 --tpm2-with-pin=yes <device>`). Keep a tested LUKS passphrase or recovery key and verify multiple reboots before relying on TPM unlock. The service makes one automatic attempt; after a timeout, skip, or error, run the helper manually from a terminal. This helper stages `rpm-ostree` kernel arguments and requires a reboot to take effect:
 
 ```bash
 sudo /usr/libexec/silverpanda/enroll-root-luks-tpm.sh
@@ -60,10 +64,41 @@ SilverPanda enables libvirt's modular systemd sockets and ensures that the packa
 
 ## Build an installer ISO
 
-After the image has successfully built and been published to GHCR, go to **GitHub → Actions → Build SilverPanda ISO → Run workflow**. Choose an image tag (normally `latest`). The workflow detects the Fedora version from the selected image, builds an x86_64 Silverblue-style installer ISO with the published image as its payload, and uploads the ISO plus its checksum as a workflow artifact for seven days.
+After the image has successfully built and been published to GHCR, go to **GitHub → Actions → Build SilverPanda ISO → Run workflow** and choose an image tag (normally `latest`). The workflow pulls the image, reads its Fedora version from `/usr/lib/os-release`, builds an x86_64 Anaconda installer ISO with [bootc-image-builder](https://github.com/osbuild/image-builder), and uploads the ISO plus a SHA-256 checksum as a workflow artifact for seven days.
 
-The ISO job runs manually so normal daily image builds do not spend the extra time and disk space needed for installer creation. If the ISO job fails, open its log and look for the first error in the **Build ISO** step. The workflow intentionally stops if the image is not accessible from GitHub-hosted runners or its Fedora version cannot be detected.
+The installer is interactive: it asks for language, time zone and disk layout (choose **Encrypt my data** there to get the LUKS2 root that the TPM first-boot offer expects). You can create your user account in the installer, or skip it and GNOME Initial Setup will ask on first boot. The settings live in [`iso/config.toml`](iso/config.toml). Don't remove its kickstart section: without one, bootc-image-builder makes an unattended installer that erases every disk.
+
+After installing from the ISO, switch to the signed image once so updates are signature-checked, then reboot:
+
+```bash
+sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/wiertless/silverpanda:latest
+```
+
+Notes:
+
+- bootc-image-builder finds Fedora's installer packages from the image's os-release `ID`, so the recipe keeps `ID=fedora` (the name still shows as SilverPanda). The workflow stops early if the ID is anything else.
+- To try an ISO from a branch before merging, use that branch's image tag, `br-<branch name with / replaced by _>-<fedora version>`, e.g. `br-my-feature-45`.
+- To build locally, pull the image and then run bootc-image-builder:
+
+  ```bash
+  sudo podman pull ghcr.io/wiertless/silverpanda:latest
+  ```
+
+  ```bash
+  sudo podman run --rm -it --privileged --pull=newer \
+    --security-opt label=type:unconfined_t \
+    -v ./iso/config.toml:/config.toml:ro -v ./output:/output \
+    -v /var/lib/containers/storage:/var/lib/containers/storage \
+    ghcr.io/osbuild/bootc-image-builder:v90.0.0 \
+    --type anaconda-iso --rootfs btrfs ghcr.io/wiertless/silverpanda:latest
+  ```
+
+  The ISO is written to `output/bootiso/install.iso`.
 
 ## GNOME Keyring auto-unlock (optional)
 
-The `tpm-keyring-unlock` package is included, but its PAM changes and per-machine TPM enrollment are not run automatically. Configure it manually only after reviewing the upstream security notes at https://github.com/dmitriitimoshenko/tpm-keyring-unlock. In particular, the upstream project's README recommends it for systems without disk encryption; this Silverpanda setup uses LUKS, so treat keyring auto-unlock as optional and test login/recovery paths carefully.
+The `tpm-keyring-unlock` package is included, but its PAM changes and per-machine TPM enrollment are not run automatically. Configure it manually only after reviewing the upstream security notes at https://github.com/dmitriitimoshenko/tpm-keyring-unlock. In particular, the upstream project's README recommends it for systems without disk encryption; this SilverPanda setup uses LUKS, so treat keyring auto-unlock as optional and test login/recovery paths carefully.
+
+## AMD NPU
+
+`recipes/ai-npu.yml` installs the XDNA2 userspace from the `abn/amd-npu` COPR and keeps Fedora's signed kernel driver. A udev rule gives the logged-in user (and the `render` group) access to `/dev/accel/*`. Locked-memory limits are raised for NPU buffers: unlimited for the `render` group in PAM sessions, and unlimited for every user's graphical session via a `user@.service` drop-in.

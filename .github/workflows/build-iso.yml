@@ -8,78 +8,130 @@ on:
         required: true
         default: latest
         type: string
-      fedora_version:
-        description: Fedora major version used by this SilverPanda image (update when changing the base Fedora release)
-        required: true
-        default: "44"
-        type: string
 
 permissions:
   contents: read
 
+env:
+  IMAGE_REPO: ghcr.io/wiertless/silverpanda
+  # Maintained successor to the archived JasonN3/build-container-installer.
+  # Use upstream's own build (Fedora-based, from current source) rather than
+  # quay.io/centos-bootc/bootc-image-builder, which packages the CentOS Stream
+  # RPM and lags behind on new Fedora releases. Bump the tag deliberately.
+  BIB_IMAGE: ghcr.io/osbuild/bootc-image-builder:v90.0.0
+
 jobs:
   build-iso:
     name: Build installable SilverPanda ISO
-    runs-on: ubuntu-latest
+    # Pinned: on the ubuntu-26.04 image (ubuntu-latest since Nov 2026)
+    # osbuild's sandbox inside the privileged builder container fails with
+    # "mount: /run/osbuild/tree/dev: permission denied". 24.04 is the
+    # environment bootc-image-builder is known to work in on GitHub runners.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: read
-      artifact-metadata: write
     steps:
+      # Done inline instead of with jlumbroso/free-disk-space: that action was
+      # transferred to lumbroso-commons in Nov 2026 and GitHub intermittently
+      # fails to resolve the old name, which aborts the run before any job
+      # starts (startup_failure, no logs).
       - name: Free disk space for the ISO build
-        uses: jlumbroso/free-disk-space@v2.0.0
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          preinstalled-runtimes: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc /usr/local/.ghcup \
+            /usr/local/share/powershell \
+            /usr/local/share/chromium \
+            /usr/share/swift \
+            /opt/hostedtoolcache
+          sudo docker image prune --all --force > /dev/null || true
+          df -h /
 
-      - name: Validate ISO inputs
+      - name: Check out ISO config
+        uses: actions/checkout@v5
+
+      - name: Validate inputs and pull the image
         id: image
         shell: bash
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
-          FEDORA_VERSION: ${{ inputs.fedora_version }}
         run: |
           set -euo pipefail
           if [[ ! "$IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
             echo "Invalid container image tag: $IMAGE_TAG" >&2
             exit 1
           fi
-          if [[ ! "$FEDORA_VERSION" =~ ^[0-9]+$ ]]; then
-            echo "Fedora version must be a numeric major version (got '$FEDORA_VERSION')." >&2
+          image_ref="${IMAGE_REPO}:${IMAGE_TAG}"
+
+          # bootc-image-builder only reads images from local container storage.
+          # (podman 4.x on ubuntu-24.04 has no --retry flag.)
+          for attempt in 1 2 3; do
+            sudo podman pull "$image_ref" && break
+            if (( attempt == 3 )); then
+              echo "Failed to pull $image_ref" >&2
+              exit 1
+            fi
+            sleep $(( attempt * 15 ))
+          done
+
+          os_release=$(sudo podman run --rm --entrypoint cat "$image_ref" /usr/lib/os-release)
+          os_id=$(sed -n 's/^ID=//p' <<< "$os_release" | tr -d '"')
+          fedora_version=$(sed -n 's/^VERSION_ID=//p' <<< "$os_release" | tr -d '"')
+          if [[ "$os_id" != fedora ]]; then
+            echo "os-release ID is '$os_id', not 'fedora'; bootc-image-builder cannot find Fedora's installer packages for it." >&2
             exit 1
           fi
-          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-          echo "fedora_version=$FEDORA_VERSION" >> "$GITHUB_OUTPUT"
-          echo "Building ISO for ghcr.io/wiertless/silverpanda:${IMAGE_TAG} using Fedora installer ${FEDORA_VERSION}."
+          if [[ ! "$fedora_version" =~ ^[0-9]+$ ]]; then
+            echo "Could not read a Fedora version from the image (got '$fedora_version')." >&2
+            exit 1
+          fi
+
+          iso_name="silverpanda-${IMAGE_TAG}-fedora-${fedora_version}-x86_64.iso"
+          {
+            echo "image_ref=$image_ref"
+            echo "image_tag=$IMAGE_TAG"
+            echo "fedora_version=$fedora_version"
+            echo "iso_name=$iso_name"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building ${iso_name} from ${image_ref}."
 
       - name: Build ISO
-        id: build
-        uses: JasonN3/build-container-installer@1c2afd1bde337ae07a1ce0a7edbda729d3e4d55c # upstream main as of 2026-09-25
-        with:
-          arch: x86_64
-          image_repo: ghcr.io/wiertless
-          image_name: silverpanda
-          image_tag: ${{ steps.image.outputs.image_tag }}
-          image_signed: "true"
-          version: ${{ steps.image.outputs.fedora_version }}
-          variant: silverblue
-          # Work around upstream action's declared-but-unforwarded rootfs_size input.
-          make_target: ROOTFS_SIZE=8
-          enable_cache_dnf: "true"
-          enable_cache_skopeo: "true"
-          iso_name: silverpanda-${{ steps.image.outputs.image_tag }}-fedora-${{ steps.image.outputs.fedora_version }}-x86_64.iso
+        shell: bash
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
+          ISO_NAME: ${{ steps.image.outputs.iso_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          sudo podman run --rm --privileged --pull=newer \
+            --security-opt label=type:unconfined_t \
+            -v "$GITHUB_WORKSPACE/iso/config.toml:/config.toml:ro" \
+            -v "$GITHUB_WORKSPACE/output:/output" \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            "$BIB_IMAGE" \
+            --log-level info \
+            --progress verbose \
+            --type anaconda-iso \
+            --rootfs btrfs \
+            "$IMAGE_REF"
+
+          sudo chown -R "$(id -u):$(id -g)" output
+          mv output/bootiso/install.iso "output/${ISO_NAME}"
+          (cd output && sha256sum "$ISO_NAME" > "${ISO_NAME}-CHECKSUM")
+          ls -lh output
 
       - name: Upload ISO and checksum
         uses: actions/upload-artifact@v7.0.2
         with:
           name: silverpanda-iso-${{ steps.image.outputs.image_tag }}-fedora-${{ steps.image.outputs.fedora_version }}
           path: |
-            ${{ steps.build.outputs.iso_path }}/${{ steps.build.outputs.iso_name }}
-            ${{ steps.build.outputs.iso_path }}/${{ steps.build.outputs.iso_name }}-CHECKSUM
+            output/${{ steps.image.outputs.iso_name }}
+            output/${{ steps.image.outputs.iso_name }}-CHECKSUM
           if-no-files-found: error
           retention-days: 7
           compression-level: 0

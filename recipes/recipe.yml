@@ -3,27 +3,33 @@
 # image will be published to ghcr.io/<user>/<name>
 name: silverpanda
 # description will be included in the image's metadata
-description: This is my personal OS image.
+description: Personal Fedora Silverblue image with KVM, TPM-assisted LUKS unlock and AMD NPU support.
 
 # the base image to build on top of (FROM) and the version tag to use
 base-image: ghcr.io/ublue-os/silverblue-main
-image-version: latest # latest is also supported if you want new updates ASAP
+# Pin the Fedora major version. Bump it deliberately once every third-party
+# repo below publishes builds for the new release.
+image-version: 45
 
 # module configuration, executed in order
 # you can include multiple instances of the same module
 modules:
+  # Keep the base ID (fedora): installer/ISO tooling looks up Fedora package
+  # repos by os-release ID, and a custom ID breaks ISO builds.
   - type: os-release
     properties:
-      ID: silver_panda
       NAME: silverpanda
       PRETTY_NAME: SilverPanda
-      
+
   - type: dnf
     repos:
+      # Remove these repo files after the build. Packages still update with
+      # every image rebuild; this just keeps Terra et al. from leaking into
+      # later `rpm-ostree install` layering on user machines.
+      cleanup: true
       files:
         - https://pkgs.tailscale.com/stable/fedora/tailscale.repo
         - https://github.com/terrapkg/subatomic-repos/raw/main/terra.repo
-      
       copr:
         - imput/helium
     install:
@@ -31,7 +37,6 @@ modules:
       #  - micro
       #  - starship
         - fish
-        - qemu
         - qemu-kvm
         - virt-manager
         - libvirt
@@ -53,13 +58,10 @@ modules:
         - tailscale
         - zed
         - helium-bin
-        - pam-devel
     remove:
       packages:
-        # example: removing firefox (in favor of the flatpak)
-        # "firefox" is the main package, "firefox-langpacks" is a dependency
         - firefox
-        - firefox-langpacks # also remove firefox dependency (not required for all packages, this is a special case)
+        - firefox-langpacks
         - yelp
         - gnome-tour
 
@@ -69,12 +71,15 @@ modules:
     repos:
       cleanup: true
       files:
+        # As of Nov 2026 Fedora_%OS_VERSION% (= Fedora_45) broke the build, so
+        # this uses the F44 build. Switch back to Fedora_%OS_VERSION% once the
+        # OBS project publishes a Fedora_45 repo.
         - https://download.opensuse.org/repositories/home:/dmitrii.timoshenko/Fedora_44/home:dmitrii.timoshenko.repo
     install:
       packages:
         - tpm-keyring-unlock
 
-  # Local inference stack; service remains opt-in per user.
+  # AMD NPU userspace (FastFlowLM/XRT). Kernel driver comes from Fedora.
   - from-file: ai-npu.yml
 
   - type: default-flatpaks
@@ -82,14 +87,13 @@ modules:
       - notify: true # Send notification after install/uninstall is finished (true/false)
         scope: system
         # If no repo information is specified, Flathub will be used by default
-        install: # system flatpaks we want all users to have and not remove
-       #   - org.mozilla.firefox
+        install:
         - org.gnome.Loupe
         - org.gnome.World.PikaBackup
         - com.github.neithern.g4music
         - io.gitlab.librewolf-community
       - scope: user # Also add Flathub user repo, but no user packages
-      
+
   - type: files
     files:
       - source: system   # copies `files/system/*` (* means everything inside it) into your image's root folder `/`
