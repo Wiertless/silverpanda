@@ -23,7 +23,11 @@ env:
 jobs:
   build-iso:
     name: Build installable SilverPanda ISO
-    runs-on: ubuntu-latest
+    # Pinned: on the ubuntu-26.04 image (ubuntu-latest since Nov 2026)
+    # osbuild's sandbox inside the privileged builder container fails with
+    # "mount: /run/osbuild/tree/dev: permission denied". 24.04 is the
+    # environment bootc-image-builder is known to work in on GitHub runners.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: read
