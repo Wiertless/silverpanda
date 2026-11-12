@@ -109,9 +109,9 @@ rm -rf ~/.local/share/tpm-keyring-unlock && sudo tpm2_evictcontrol -C o -c 0x810
 
 ## Zed C/C++ toolbox
 
-The host image has no compiler headers, so a host clangd reports `'iostream' file not found`. SilverPanda instead ships `/usr/bin/clangd` as a wrapper that runs the real clangd inside a toolbox named `zed` (Fedora's default toolbox image, matching the host release) with `clang-tools-extra`, `gcc-c++`, `cmake`, `make`, `gdb` and `fish`. Zed uses clangd from `PATH` when it finds one, so no Zed settings are needed.
+The host image has no compiler headers, so a host clangd reports `'iostream' file not found`. SilverPanda instead ships `/usr/bin/clangd` as a wrapper that runs the real clangd inside a toolbox named `zed`. That toolbox uses `ghcr.io/wiertless/silverpanda-toolbox`, built daily from [`toolbox/Containerfile`](toolbox/Containerfile): Fedora's toolbox image plus `clang-tools-extra`, `gcc-c++`, `make`, `cmake`, `ninja-build`, `gdb`, `git` and `fish`, without weak dependencies or package caches. The image is signed with the same key as the OS image, and the OS image's container policy requires that signature. If it can't be pulled, the setup falls back to Fedora's toolbox image and installs the same packages. Zed uses clangd from `PATH` when it finds one, so no Zed settings are needed.
 
-The toolbox is created on first login by the `silverpanda-zed-toolbox` user service, or on the first clangd start if that has not finished yet. It downloads the toolbox image and packages, so the first start can take a few minutes. Check progress with `journalctl --user -u silverpanda-zed-toolbox`.
+Nothing is downloaded until it's needed: the toolbox is created the first time something starts clangd (usually opening a C/C++ file in Zed), which downloads the toolbox image and takes a minute or two that one time.
 
 - Build and run your code in the same toolbox (`toolbox enter zed`) so it uses the headers clangd sees. Install more libraries there with `sudo dnf install ...`.
 - To make Zed's built-in terminal open in that toolbox, add this to `~/.config/zed/settings.json`:
@@ -120,7 +120,7 @@ The toolbox is created on first login by the `silverpanda-zed-toolbox` user serv
   "terminal": { "shell": { "with_arguments": { "program": "/usr/bin/toolbox", "args": ["enter", "zed"] } } }
   ```
 - Projects with a `compile_commands.json` (CMake: `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`) get the most accurate results.
-- To rebuild the toolbox from scratch, remove it with `toolbox rm --force zed` and restart Zed.
+- Toolbox containers don't update with their image. To move to a newer toolchain, or from an older `zed` toolbox to the prebuilt image, run `toolbox rm --force zed` and restart Zed.
 - Layering `clang-tools-extra` on the host would conflict with the wrapper; install it in the toolbox instead.
 
 ## Firewall

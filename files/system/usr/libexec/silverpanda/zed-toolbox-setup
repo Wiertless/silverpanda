@@ -5,7 +5,11 @@
 set -euo pipefail
 
 CONTAINER=zed
-PACKAGES=(clang-tools-extra gcc-c++ cmake make gdb fish)
+# Prebuilt, signed toolbox image with the toolchain (toolbox/Containerfile).
+. /usr/lib/os-release
+IMAGE="ghcr.io/wiertless/silverpanda-toolbox:${VERSION_ID}"
+# Fallback when that image can't be pulled: Fedora's toolbox plus these.
+PACKAGES=(clang-tools-extra gcc-c++ make cmake ninja-build gdb git fish)
 
 # Only for regular users on the host: not inside a container, and not for
 # GDM's greeter or other system/dynamic users, which also get a user manager.
@@ -20,7 +24,7 @@ state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/silverpanda"
 ready="$state_dir/zed-toolbox-ready"
 mkdir -p "$state_dir"
 
-# The login service and Zed's first clangd start can race; one does the work.
+# Two clangd starts (e.g. two Zed windows) can race; one does the work.
 exec 9>"$state_dir/zed-toolbox.lock"
 flock 9
 
@@ -30,7 +34,12 @@ fi
 rm -f "$ready"
 
 if ! podman container exists "$CONTAINER"; then
-  toolbox create --assumeyes "$CONTAINER"
+  if ! toolbox create --assumeyes --image "$IMAGE" "$CONTAINER"; then
+    echo "SilverPanda: could not use $IMAGE; falling back to Fedora's toolbox image" >&2
+    toolbox create --assumeyes "$CONTAINER"
+  fi
 fi
-toolbox run --container "$CONTAINER" sudo dnf install -y "${PACKAGES[@]}"
+if ! toolbox run --container "$CONTAINER" sh -c 'command -v clangd' >/dev/null; then
+  toolbox run --container "$CONTAINER" sudo dnf install -y "${PACKAGES[@]}"
+fi
 touch "$ready"

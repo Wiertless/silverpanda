@@ -1,0 +1,16 @@
+# SilverPanda toolbox: Fedora's toolbox image with clangd and a C/C++
+# toolchain preinstalled. Used by the "zed" toolbox (see
+# files/system/usr/libexec/silverpanda/zed-toolbox-setup).
+ARG FEDORA_VERSION=45
+FROM registry.fedoraproject.org/fedora-toolbox:${FEDORA_VERSION}
+
+LABEL org.opencontainers.image.source="https://github.com/wiertless/silverpanda" \
+      org.opencontainers.image.description="Fedora toolbox with clangd and a C/C++ toolchain, used by SilverPanda's Zed setup" \
+      com.github.containers.toolbox="true"
+
+# One layer on top of the shared Fedora base. No weak dependencies and no
+# package caches; man pages and the full tools stay.
+RUN dnf -y install --setopt=install_weak_deps=False \
+        clang-tools-extra gcc-c++ make cmake ninja-build gdb git fish \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf /var/cache/libdnf5 /var/log/dnf*.log
