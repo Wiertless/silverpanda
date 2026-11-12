@@ -35,4 +35,5 @@ jobs:
           pr_event_number: ${{ github.event.number }}
           maximize_build_space: true
           # Rechunk with rpm-ostree so updates only download changed layers.
-          build_chunked_oci: true
+          # Skipped for PR builds: nobody installs those, and it adds ~7 min.
+          build_chunked_oci: ${{ github.event_name != 'pull_request' }}
