@@ -129,7 +129,7 @@ The default firewalld zone is `public` (SSH, mDNS and DHCPv6 client only) instea
 
 ## AMD NPU
 
-`recipes/ai-npu.yml` installs the XDNA2 userspace from the `abn/amd-npu` COPR and keeps Fedora's signed kernel driver. A udev rule gives the logged-in user (and the `render` group) access to `/dev/accel/*`. Locked memory is unlimited for members of the `render` group only (PAM sessions and the systemd user manager, so graphical apps too). Add your user to it once, then log out and back in. On Silverblue the group lives in `/usr/lib/group`, so copy it to `/etc/group` first:
+`recipes/ai-npu.yml` installs the XDNA2 userspace from the `abn/amd-npu` COPR and keeps Fedora's signed kernel driver. A udev rule gives the logged-in user (and the `render` group) access to `/dev/accel/*`. Locked memory is unlimited for members of the `render` group only (PAM sessions and the systemd user manager, so graphical apps too). Add your user to it once, then reboot (logging out is not enough: the systemd user manager keeps running with the old groups). On Silverblue the group lives in `/usr/lib/group`, so copy it to `/etc/group` first:
 
 ```bash
 grep -E '^render:' /etc/group || grep -E '^render:' /usr/lib/group | sudo tee -a /etc/group
