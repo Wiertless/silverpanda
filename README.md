@@ -100,25 +100,38 @@ Notes:
 
 Fedora 45 replaced GNOME Keyring with oo7 (`oo7-daemon` and `pam_oo7`). Password logins unlock it; fingerprint logins leave it locked until you type the password, as on stock Fedora. Since GNOME 51 (Fedora 45) the login screen after boot does not offer fingerprint at all, by upstream design; fingerprint still works on the lock screen and for `sudo`. SilverPanda no longer ships `tpm-keyring-unlock`, which only works with `pam_gnome_keyring`.
 
-Machines that had `tpm-keyring-unlock` configured on an earlier image keep its edited GDM PAM files in `/etc/pam.d`, which override Fedora 45's own and break keyring unlock. To clean up (do not use `tpm-keyring-unlock-deconfigure`, which restores Fedora 44 copies):
+Machines that had `tpm-keyring-unlock` configured on an earlier image keep its edited GDM PAM files in `/etc/pam.d`, which override Fedora 45's own and break keyring unlock. The image removes its SELinux module on boot. To clean up the rest (do not use `tpm-keyring-unlock-deconfigure`, which restores Fedora 44 copies):
 
 ```bash
 sudo mkdir -p /root/pam-f44 && sudo mv /etc/pam.d/gdm-* /root/pam-f44/
-sudo semodule -r tpm_keyring_unlock
 rm -rf ~/.local/share/tpm-keyring-unlock && sudo tpm2_evictcontrol -C o -c 0x81018000
 ```
 
 ## Zed C/C++ toolbox
 
-The host image has no compiler headers, so a host clangd reports `'iostream' file not found`. SilverPanda instead ships `/usr/bin/clangd` as a wrapper that runs the real clangd inside a toolbox named `zed` (Fedora's default toolbox image, matching the host release) with `clang-tools-extra`, `gcc-c++`, `cmake`, `make` and `gdb`. Zed uses clangd from `PATH` when it finds one, so no Zed settings are needed.
+The host image has no compiler headers, so a host clangd reports `'iostream' file not found`. SilverPanda instead ships `/usr/bin/clangd` as a wrapper that runs the real clangd inside a toolbox named `zed` (Fedora's default toolbox image, matching the host release) with `clang-tools-extra`, `gcc-c++`, `cmake`, `make`, `gdb` and `fish`. Zed uses clangd from `PATH` when it finds one, so no Zed settings are needed.
 
 The toolbox is created on first login by the `silverpanda-zed-toolbox` user service, or on the first clangd start if that has not finished yet. It downloads the toolbox image and packages, so the first start can take a few minutes. Check progress with `journalctl --user -u silverpanda-zed-toolbox`.
 
 - Build and run your code in the same toolbox (`toolbox enter zed`) so it uses the headers clangd sees. Install more libraries there with `sudo dnf install ...`.
+- To make Zed's built-in terminal open in that toolbox, add this to `~/.config/zed/settings.json`:
+
+  ```json
+  "terminal": { "shell": { "with_arguments": { "program": "/usr/bin/toolbox", "args": ["enter", "zed"] } } }
+  ```
 - Projects with a `compile_commands.json` (CMake: `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`) get the most accurate results.
 - To rebuild the toolbox from scratch, remove it with `toolbox rm --force zed` and restart Zed.
 - Layering `clang-tools-extra` on the host would conflict with the wrapper; install it in the toolbox instead.
 
+## Firewall
+
+The default firewalld zone is `public` (SSH, mDNS and DHCPv6 client only) instead of Fedora Workstation's zone, which accepts incoming connections on ports 1025–65535. Open what you need per service, e.g. `sudo firewall-cmd --permanent --add-service=kdeconnect && sudo firewall-cmd --reload`. Incoming connections over Tailscale are filtered too; to allow them, run `sudo firewall-cmd --permanent --zone=trusted --add-interface=tailscale0 && sudo firewall-cmd --reload`. If you changed `/etc/firewalld/firewalld.conf` yourself, your copy is kept; set the zone with `sudo firewall-cmd --set-default-zone=public`.
+
 ## AMD NPU
 
-`recipes/ai-npu.yml` installs the XDNA2 userspace from the `abn/amd-npu` COPR and keeps Fedora's signed kernel driver. A udev rule gives the logged-in user (and the `render` group) access to `/dev/accel/*`. Locked-memory limits are raised for NPU buffers: unlimited for the `render` group in PAM sessions, and unlimited for every user's graphical session via a `user@.service` drop-in.
+`recipes/ai-npu.yml` installs the XDNA2 userspace from the `abn/amd-npu` COPR and keeps Fedora's signed kernel driver. A udev rule gives the logged-in user (and the `render` group) access to `/dev/accel/*`. Locked memory is unlimited for members of the `render` group only (PAM sessions and the systemd user manager, so graphical apps too). Add your user to it once, then log out and back in. On Silverblue the group lives in `/usr/lib/group`, so copy it to `/etc/group` first:
+
+```bash
+grep -E '^render:' /etc/group || grep -E '^render:' /usr/lib/group | sudo tee -a /etc/group
+sudo usermod -aG render "$USER"
+```
