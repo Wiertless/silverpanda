@@ -97,7 +97,7 @@ Notes:
 
 ## Login keyring
 
-Fedora 45 replaced GNOME Keyring with oo7 (`oo7-daemon` and `pam_oo7`). Password logins unlock it; fingerprint logins leave it locked until you type the password, as on stock Fedora. SilverPanda no longer ships `tpm-keyring-unlock`, which only works with `pam_gnome_keyring`.
+Fedora 45 replaced GNOME Keyring with oo7 (`oo7-daemon` and `pam_oo7`). Password logins unlock it; fingerprint logins leave it locked until you type the password, as on stock Fedora. Since GNOME 51 (Fedora 45) the login screen after boot does not offer fingerprint at all, by upstream design; fingerprint still works on the lock screen and for `sudo`. SilverPanda no longer ships `tpm-keyring-unlock`, which only works with `pam_gnome_keyring`.
 
 If you configured `tpm-keyring-unlock` on an earlier image, its edited copies of GDM's PAM files in `/etc/pam.d` still override Fedora 45's own files in `/usr/lib/pam.d`. That breaks keyring unlock and fingerprint at the login screen. Move them aside, unload its SELinux module, and reboot. Do not run `tpm-keyring-unlock-deconfigure`: it restores Fedora 44 copies of the files.
 
