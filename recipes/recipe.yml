@@ -89,6 +89,7 @@ modules:
         - virtlockd.socket
         - silverpanda-libvirt-network.service
         - silverpanda-firstboot-luks-tpm.service
+        - silverpanda-remove-tpm-keyring-selinux.service
     # Creates the "zed" toolbox that /usr/bin/clangd runs in.
     user:
       enabled:
@@ -97,5 +98,9 @@ modules:
   # files/system/etc/dracut.conf.d enables the TPM2 dracut module. Rebuild the
   # initramfs in the image so it can use TPM2 tokens before mounting root.
   - type: initramfs
+
+  - type: script
+    scripts:
+      - firewalld-default-zone.sh
 
   - type: signing

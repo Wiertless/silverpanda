@@ -1,0 +1,12 @@
+[Unit]
+Description=Remove the leftover tpm-keyring-unlock SELinux module
+# The package is gone; its module only let GDM's domain (xdm_t) open the TPM.
+ConditionPathExists=/etc/selinux/targeted/active/modules/400/tpm_keyring_unlock
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/semodule -r tpm_keyring_unlock
+
+[Install]
+WantedBy=multi-user.target
