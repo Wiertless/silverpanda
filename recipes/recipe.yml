@@ -65,20 +65,6 @@ modules:
         - yelp
         - gnome-tour
 
-  # Install the TPM-backed keyring helper as image content. Its per-machine
-  # TPM enrollment and PAM changes are deliberately performed after install.
-  - type: dnf
-    repos:
-      cleanup: true
-      files:
-        # As of Nov 2026 Fedora_%OS_VERSION% (= Fedora_45) broke the build, so
-        # this uses the F44 build. Switch back to Fedora_%OS_VERSION% once the
-        # OBS project publishes a Fedora_45 repo.
-        - https://download.opensuse.org/repositories/home:/dmitrii.timoshenko/Fedora_44/home:dmitrii.timoshenko.repo
-    install:
-      packages:
-        - tpm-keyring-unlock
-
   # AMD NPU userspace (FastFlowLM/XRT). Kernel driver comes from Fedora.
   - from-file: ai-npu.yml
 
