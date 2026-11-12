@@ -15,9 +15,10 @@ jobs:
       - name: Run ShellCheck on image scripts
         run: |
           set -euo pipefail
-          mapfile -t scripts < <(git ls-files 'files/**/*.sh')
+          mapfile -t scripts < <(git ls-files 'files/**/*.sh' files/system/usr/bin files/system/usr/libexec)
           if (( ${#scripts[@]} == 0 )); then
             echo "No shell scripts found."
             exit 0
           fi
+          mapfile -t scripts < <(printf '%s\n' "${scripts[@]}" | sort -u)
           shellcheck --severity=warning "${scripts[@]}"

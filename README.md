@@ -5,6 +5,7 @@ A personal [Fedora Silverblue](https://fedoraproject.org/atomic-desktops/silverb
 - **Virtualization:** QEMU/KVM, libvirt (modular daemons) and virt-manager, with the default NAT network set up automatically
 - **Disk encryption:** a one-time first-boot offer to unlock the LUKS2 root with the TPM
 - **AMD NPU:** XDNA2 userspace (FastFlowLM/XRT) plus device permissions and memlock limits for it
+- **Zed C/C++ support:** a `zed` toolbox with clangd and the GCC toolchain, so includes like `<iostream>` resolve
 - **Apps and tools:** fish (default shell for new users), Tailscale, Zed, Helium, Ptyxis, fastfetch, and LibreWolf, Loupe, Pika Backup and G4Music as Flatpaks
 - **Removed:** Firefox, Yelp, GNOME Tour
 
@@ -106,6 +107,17 @@ sudo mkdir -p /root/pam-f44 && sudo mv /etc/pam.d/gdm-* /root/pam-f44/
 sudo semodule -r tpm_keyring_unlock
 rm -rf ~/.local/share/tpm-keyring-unlock && sudo tpm2_evictcontrol -C o -c 0x81018000
 ```
+
+## Zed C/C++ toolbox
+
+The host image has no compiler headers, so a host clangd reports `'iostream' file not found`. SilverPanda instead ships `/usr/bin/clangd` as a wrapper that runs the real clangd inside a toolbox named `zed` (Fedora's default toolbox image, matching the host release) with `clang-tools-extra`, `gcc-c++`, `cmake`, `make` and `gdb`. Zed uses clangd from `PATH` when it finds one, so no Zed settings are needed.
+
+The toolbox is created on first login by the `silverpanda-zed-toolbox` user service, or on the first clangd start if that has not finished yet. It downloads the toolbox image and packages, so the first start can take a few minutes. Check progress with `journalctl --user -u silverpanda-zed-toolbox`.
+
+- Build and run your code in the same toolbox (`toolbox enter zed`) so it uses the headers clangd sees. Install more libraries there with `sudo dnf install ...`.
+- Projects with a `compile_commands.json` (CMake: `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`) get the most accurate results.
+- To rebuild the toolbox from scratch, remove it with `toolbox rm --force zed` and restart Zed.
+- Layering `clang-tools-extra` on the host would conflict with the wrapper; install it in the toolbox instead.
 
 ## AMD NPU
 
