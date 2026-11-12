@@ -125,7 +125,7 @@ The toolbox is created on first login by the `silverpanda-zed-toolbox` user serv
 
 ## Firewall
 
-The default firewalld zone is `public` (SSH, mDNS and DHCPv6 client only) instead of Fedora Workstation's zone, which accepts incoming connections on ports 1025–65535. Open what you need per service, e.g. `sudo firewall-cmd --permanent --add-service=kdeconnect && sudo firewall-cmd --reload`. Incoming connections over Tailscale are filtered too; to allow them, run `sudo firewall-cmd --permanent --zone=trusted --add-interface=tailscale0 && sudo firewall-cmd --reload`. If you changed `/etc/firewalld/firewalld.conf` yourself, your copy is kept; set the zone with `sudo firewall-cmd --set-default-zone=public`.
+The default firewalld zone is `public` (SSH, mDNS and DHCPv6 client only) instead of Fedora Workstation's zone, which accepts incoming connections on ports 1025–65535. Open what you need per service, e.g. `sudo firewall-cmd --permanent --add-service=kdeconnect && sudo firewall-cmd --reload`. The `tailscale0` interface is in the `trusted` zone, so the tailnet is not filtered; Tailscale ACLs control who can reach the machine. If you changed `/etc/firewalld/firewalld.conf` yourself, your copy is kept; set the zone with `sudo firewall-cmd --set-default-zone=public`.
 
 ## AMD NPU
 
