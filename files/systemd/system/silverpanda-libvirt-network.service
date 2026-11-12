@@ -1,5 +1,5 @@
 [Unit]
-Description=Ensure Silverpanda's default libvirt NAT network is defined and active
+Description=Ensure SilverPanda's default libvirt NAT network is defined and active
 After=network-pre.target virtqemud.socket virtnetworkd.socket
 Wants=virtqemud.socket virtnetworkd.socket
 ConditionPathExists=/usr/share/libvirt/networks/default.xml
