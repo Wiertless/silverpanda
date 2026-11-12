@@ -18,7 +18,7 @@ env:
   # Use upstream's own build (Fedora-based, from current source) rather than
   # quay.io/centos-bootc/bootc-image-builder, which packages the CentOS Stream
   # RPM and lags behind on new Fedora releases. Bump the tag deliberately.
-  BIB_IMAGE: ghcr.io/osbuild/bootc-image-builder:v90.0.0
+  BIB_IMAGE: ghcr.io/osbuild/bootc-image-builder:v90.0.0@sha256:2d29e039bbc0a87506055368fa1ac1c1a511cefe762a95dd099e89e517701080
 
 jobs:
   build-iso:
