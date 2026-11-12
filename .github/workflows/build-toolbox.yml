@@ -91,4 +91,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' "$REGISTRY_TOKEN" | cosign login ghcr.io -u "$REGISTRY_USER" --password-stdin
-          cosign sign --yes --key env://COSIGN_PRIVATE_KEY "$IMAGE@$DIGEST"
+          # Legacy .sig format: podman's sigstoreSigned policy (and the OS image's
+          # own signatures) use it; cosign v3's default bundle format isn't read.
+          cosign sign --yes --new-bundle-format=false --use-signing-config=false \
+            --key env://COSIGN_PRIVATE_KEY "$IMAGE@$DIGEST"
