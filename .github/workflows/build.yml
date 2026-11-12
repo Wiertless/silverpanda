@@ -3,6 +3,7 @@ on:
   schedule:
     - cron: "00 06 * * *" # daily at 06:00 UTC, after the ublue base images build
   push:
+    branches: [main] # PR branches are built by the pull_request trigger
     paths-ignore:
       - "**.md"
   pull_request:
@@ -33,3 +34,5 @@ jobs:
           registry_token: ${{ github.token }}
           pr_event_number: ${{ github.event.number }}
           maximize_build_space: true
+          # Rechunk with rpm-ostree so updates only download changed layers.
+          build_chunked_oci: true

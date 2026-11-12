@@ -1,6 +1,7 @@
 name: lint
 on:
   push:
+    branches: [main] # PR branches are checked by the pull_request trigger
   pull_request:
 
 permissions:

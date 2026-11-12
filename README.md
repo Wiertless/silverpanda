@@ -90,7 +90,7 @@ Notes:
     --security-opt label=type:unconfined_t \
     -v ./iso/config.toml:/config.toml:ro -v ./output:/output \
     -v /var/lib/containers/storage:/var/lib/containers/storage \
-    ghcr.io/osbuild/bootc-image-builder:v90.0.0 \
+    ghcr.io/osbuild/bootc-image-builder:v90.0.0@sha256:2d29e039bbc0a87506055368fa1ac1c1a511cefe762a95dd099e89e517701080 \
     --type anaconda-iso --rootfs btrfs ghcr.io/wiertless/silverpanda:latest
   ```
 
