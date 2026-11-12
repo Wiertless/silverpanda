@@ -1,0 +1,36 @@
+#!/usr/bin/bash
+# Create the "zed" toolbox and install the C/C++ toolchain in it. Zed's
+# language servers run there (see /usr/bin/clangd), because the host image has
+# no compiler headers. Safe to run repeatedly; it does nothing once set up.
+set -euo pipefail
+
+CONTAINER=zed
+PACKAGES=(clang-tools-extra gcc-c++ cmake make gdb)
+
+# Only for regular users on the host: not inside a container, and not for
+# GDM's greeter or other system/dynamic users, which also get a user manager.
+[[ -e /run/.containerenv ]] && exit 0
+uid=$(id -u)
+uid_min=$(awk '$1 == "UID_MIN" { print $2 }' /etc/login.defs 2>/dev/null || true)
+uid_max=$(awk '$1 == "UID_MAX" { print $2 }' /etc/login.defs 2>/dev/null || true)
+(( uid >= ${uid_min:-1000} && uid <= ${uid_max:-60000} )) || exit 0
+[[ -n "${HOME:-}" && -d "$HOME" && -w "$HOME" ]] || exit 0
+
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/silverpanda"
+ready="$state_dir/zed-toolbox-ready"
+mkdir -p "$state_dir"
+
+# The login service and Zed's first clangd start can race; one does the work.
+exec 9>"$state_dir/zed-toolbox.lock"
+flock 9
+
+if [[ -e "$ready" ]] && podman container exists "$CONTAINER"; then
+  exit 0
+fi
+rm -f "$ready"
+
+if ! podman container exists "$CONTAINER"; then
+  toolbox create --assumeyes "$CONTAINER"
+fi
+toolbox run --container "$CONTAINER" sudo dnf install -y "${PACKAGES[@]}"
+touch "$ready"

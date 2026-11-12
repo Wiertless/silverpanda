@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+# SilverPanda: the host has no C/C++ headers, so run the real clangd inside the
+# "zed" toolbox, where they are installed. Zed (and anything else that looks
+# for clangd on PATH) uses this. Home directories are shared with the toolbox,
+# so project paths are the same on both sides.
+set -euo pipefail
+
+# stdout is the LSP channel; keep setup output off it.
+/usr/libexec/silverpanda/zed-toolbox-setup >&2
+exec /usr/bin/toolbox run --container zed clangd "$@"
