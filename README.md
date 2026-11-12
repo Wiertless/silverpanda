@@ -95,9 +95,18 @@ Notes:
 
   The ISO is written to `output/bootiso/install.iso`.
 
-## GNOME Keyring auto-unlock (optional)
+## Login keyring
 
-The `tpm-keyring-unlock` package is included, but its PAM changes and per-machine TPM enrollment are not run automatically. Configure it manually only after reviewing the upstream security notes at https://github.com/dmitriitimoshenko/tpm-keyring-unlock. In particular, the upstream project's README recommends it for systems without disk encryption; this SilverPanda setup uses LUKS, so treat keyring auto-unlock as optional and test login/recovery paths carefully.
+Fedora 45 replaced GNOME Keyring with oo7 (`oo7-daemon` and `pam_oo7`). Password logins unlock it; fingerprint logins leave it locked until you type the password, as on stock Fedora. SilverPanda no longer ships `tpm-keyring-unlock`, which only works with `pam_gnome_keyring`.
+
+If you configured `tpm-keyring-unlock` on an earlier image, its edited copies of GDM's PAM files in `/etc/pam.d` still override Fedora 45's own files in `/usr/lib/pam.d`. That breaks keyring unlock and fingerprint at the login screen. Move them aside, unload its SELinux module, and reboot. Do not run `tpm-keyring-unlock-deconfigure`: it restores Fedora 44 copies of the files.
+
+```bash
+sudo mkdir -p /root/pam-f44 && sudo mv /etc/pam.d/gdm-* /root/pam-f44/
+sudo semodule -r tpm_keyring_unlock
+```
+
+The sealed secret in `~/.local/share/tpm-keyring-unlock` and the persisted TPM key at handle `0x81018000` can then be removed (`rm -rf ~/.local/share/tpm-keyring-unlock`, `sudo tpm2_evictcontrol -C o -c 0x81018000`).
 
 ## AMD NPU
 
