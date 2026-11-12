@@ -121,4 +121,9 @@ The toolbox is created on first login by the `silverpanda-zed-toolbox` user serv
 
 ## AMD NPU
 
-`recipes/ai-npu.yml` installs the XDNA2 userspace from the `abn/amd-npu` COPR and keeps Fedora's signed kernel driver. A udev rule gives the logged-in user (and the `render` group) access to `/dev/accel/*`. Locked-memory limits are raised for NPU buffers: unlimited for the `render` group in PAM sessions, and unlimited for every user's graphical session via a `user@.service` drop-in.
+`recipes/ai-npu.yml` installs the XDNA2 userspace from the `abn/amd-npu` COPR and keeps Fedora's signed kernel driver. A udev rule gives the logged-in user (and the `render` group) access to `/dev/accel/*`. Locked memory is unlimited for members of the `render` group only (PAM sessions and the systemd user manager, so graphical apps too). Add your user to it once, then log out and back in. On Silverblue the group lives in `/usr/lib/group`, so copy it to `/etc/group` first:
+
+```bash
+grep -E '^render:' /etc/group || grep -E '^render:' /usr/lib/group | sudo tee -a /etc/group
+sudo usermod -aG render "$USER"
+```
