@@ -1,0 +1,94 @@
+name: toolbox
+on:
+  schedule:
+    - cron: "30 06 * * *" # daily, after the main image build
+  push:
+    branches: [main]
+    paths:
+      - "toolbox/**"
+      - "recipes/recipe.yml"
+      - ".github/workflows/build-toolbox.yml"
+  pull_request:
+    paths:
+      - "toolbox/**"
+      - "recipes/recipe.yml"
+      - ".github/workflows/build-toolbox.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  toolbox:
+    name: Build toolbox image
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/wiertless/silverpanda-toolbox
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read Fedora version from the recipe
+        id: ver
+        run: |
+          set -euo pipefail
+          v=$(awk '$1 == "image-version:" { print $2 }' recipes/recipe.yml)
+          if [[ ! "$v" =~ ^[0-9]+$ ]]; then
+            echo "image-version in recipes/recipe.yml is not a number: '$v'" >&2
+            exit 1
+          fi
+          echo "fedora=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          FEDORA: ${{ steps.ver.outputs.fedora }}
+        run: podman build --pull=always --build-arg "FEDORA_VERSION=$FEDORA" -t "$IMAGE:$FEDORA" toolbox
+
+      - name: Smoke test (clangd, compile and run C++)
+        env:
+          FEDORA: ${{ steps.ver.outputs.fedora }}
+        run: |
+          podman run --rm "$IMAGE:$FEDORA" sh -euc '
+            clangd --version | head -1
+            printf "#include <iostream>\nint main() { std::cout << \"ok\\\\n\"; }\n" > /tmp/t.cpp
+            g++ -O2 /tmp/t.cpp -o /tmp/t && /tmp/t
+            cmake --version | head -1; ninja --version; fish --version'
+          podman image ls "$IMAGE"
+
+      - name: Push
+        if: github.event_name != 'pull_request'
+        id: push
+        env:
+          FEDORA: ${{ steps.ver.outputs.fedora }}
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REGISTRY_TOKEN" | podman login ghcr.io -u "$REGISTRY_USER" --password-stdin
+          podman tag "$IMAGE:$FEDORA" "$IMAGE:latest"
+          podman push --digestfile digest "$IMAGE:$FEDORA"
+          podman push "$IMAGE:latest"
+          echo "digest=$(cat digest)" >> "$GITHUB_OUTPUT"
+
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
+      - name: Sign
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USER: ${{ github.repository_owner }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          COSIGN_PASSWORD: ""
+        run: |
+          set -euo pipefail
+          printf '%s' "$REGISTRY_TOKEN" | cosign login ghcr.io -u "$REGISTRY_USER" --password-stdin
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY "$IMAGE@$DIGEST"

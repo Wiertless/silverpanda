@@ -97,3 +97,8 @@ modules:
       - firewalld-default-zone.sh
 
   - type: signing
+
+  # Also require that signature on the prebuilt toolbox image.
+  - type: script
+    scripts:
+      - toolbox-signing-policy.sh
