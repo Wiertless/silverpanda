@@ -1,5 +1,5 @@
 [Unit]
-Description=One-time offer to enable TPM2 unlock for Silverpanda's root LUKS2 volume
+Description=One-time offer to enable TPM2 unlock for SilverPanda's root LUKS2 volume
 After=local-fs.target systemd-ask-password-console.path
 Wants=systemd-ask-password-console.path
 ConditionPathExists=!/var/lib/silverpanda/luks-tpm-enrollment-attempted

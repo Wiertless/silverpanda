@@ -1,18 +1,13 @@
 ---
 # yaml-language-server: $schema=https://schema.blue-build.org/recipe-v1.json
-# image will be published to ghcr.io/<user>/<name>
 name: silverpanda
-# description will be included in the image's metadata
 description: Personal Fedora Silverblue image with KVM, TPM-assisted LUKS unlock and AMD NPU support.
 
-# the base image to build on top of (FROM) and the version tag to use
 base-image: ghcr.io/ublue-os/silverblue-main
 # Pin the Fedora major version. Bump it deliberately once every third-party
 # repo below publishes builds for the new release.
 image-version: 45
 
-# module configuration, executed in order
-# you can include multiple instances of the same module
 modules:
   # Keep the base ID (fedora): installer/ISO tooling looks up Fedora package
   # repos by os-release ID, and a custom ID breaks ISO builds.
@@ -34,8 +29,6 @@ modules:
         - imput/helium
     install:
       packages:
-      #  - micro
-      #  - starship
         - fish
         - qemu-kvm
         - virt-manager
@@ -70,19 +63,19 @@ modules:
 
   - type: default-flatpaks
     configurations:
-      - notify: true # Send notification after install/uninstall is finished (true/false)
+      - notify: true
         scope: system
-        # If no repo information is specified, Flathub will be used by default
         install:
-        - org.gnome.Loupe
-        - org.gnome.World.PikaBackup
-        - com.github.neithern.g4music
-        - io.gitlab.librewolf-community
-      - scope: user # Also add Flathub user repo, but no user packages
+          - org.gnome.Loupe
+          - org.gnome.World.PikaBackup
+          - com.github.neithern.g4music
+          - io.gitlab.librewolf-community
+      # Adds the Flathub user remote; no user Flatpaks are installed.
+      - scope: user
 
   - type: files
     files:
-      - source: system   # copies `files/system/*` (* means everything inside it) into your image's root folder `/`
+      - source: system
         destination: /
 
   # Enable modern libvirt daemons via socket activation. Do not grant every
@@ -103,4 +96,4 @@ modules:
   # initramfs in the image so it can use TPM2 tokens before mounting root.
   - type: initramfs
 
-  - type: signing # this sets up the proper policy & signing files for signed images to work fully
+  - type: signing

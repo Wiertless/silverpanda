@@ -10,7 +10,7 @@ chmod 0755 "$STATE_DIR"
 printf 'attempted %s\n' "$(date --iso-8601=seconds)" > "$ATTEMPT_MARKER"
 chmod 0600 "$ATTEMPT_MARKER"
 
-log() { printf 'Silverpanda LUKS TPM setup: %s\n' "$*"; }
+log() { printf 'SilverPanda LUKS TPM setup: %s\n' "$*"; }
 
 if [[ ! -x /usr/bin/systemd-cryptenroll || ! -x /usr/bin/cryptsetup || ! -x /usr/bin/rpm-ostree ]]; then
   log 'required system tools are missing; no changes were made.'
@@ -63,7 +63,7 @@ fi
 if [[ "$has_tpm_token" == true ]]; then
   prompt="TPM2 enrollment already exists for root LUKS device $luks_device. Type ENABLE to configure TPM-assisted root unlocking on future boots (anything else skips):"
 else
-  prompt="Silverpanda found root LUKS2 device $luks_device (UUID $luks_uuid). This adds a TPM2 keyslot and keeps all existing passphrases/recovery keys. Type ENROLL to continue (anything else skips):"
+  prompt="SilverPanda found root LUKS2 device $luks_device (UUID $luks_uuid). This adds a TPM2 keyslot and keeps all existing passphrases/recovery keys. Type ENROLL to continue (anything else skips):"
 fi
 
 confirmation=$(/usr/bin/systemd-ask-password --timeout=60 --echo=yes "$prompt") || {

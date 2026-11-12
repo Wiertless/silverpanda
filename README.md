@@ -97,16 +97,15 @@ Notes:
 
 ## Login keyring
 
-Fedora 45 replaced GNOME Keyring with oo7 (`oo7-daemon` and `pam_oo7`). Password logins unlock it; fingerprint logins leave it locked until you type the password, as on stock Fedora. SilverPanda no longer ships `tpm-keyring-unlock`, which only works with `pam_gnome_keyring`.
+Fedora 45 replaced GNOME Keyring with oo7 (`oo7-daemon` and `pam_oo7`). Password logins unlock it; fingerprint logins leave it locked until you type the password, as on stock Fedora. Since GNOME 51 (Fedora 45) the login screen after boot does not offer fingerprint at all, by upstream design; fingerprint still works on the lock screen and for `sudo`. SilverPanda no longer ships `tpm-keyring-unlock`, which only works with `pam_gnome_keyring`.
 
-If you configured `tpm-keyring-unlock` on an earlier image, its edited copies of GDM's PAM files in `/etc/pam.d` still override Fedora 45's own files in `/usr/lib/pam.d`. That breaks keyring unlock and fingerprint at the login screen. Move them aside, unload its SELinux module, and reboot. Do not run `tpm-keyring-unlock-deconfigure`: it restores Fedora 44 copies of the files.
+Machines that had `tpm-keyring-unlock` configured on an earlier image keep its edited GDM PAM files in `/etc/pam.d`, which override Fedora 45's own and break keyring unlock. To clean up (do not use `tpm-keyring-unlock-deconfigure`, which restores Fedora 44 copies):
 
 ```bash
 sudo mkdir -p /root/pam-f44 && sudo mv /etc/pam.d/gdm-* /root/pam-f44/
 sudo semodule -r tpm_keyring_unlock
+rm -rf ~/.local/share/tpm-keyring-unlock && sudo tpm2_evictcontrol -C o -c 0x81018000
 ```
-
-The sealed secret in `~/.local/share/tpm-keyring-unlock` and the persisted TPM key at handle `0x81018000` can then be removed (`rm -rf ~/.local/share/tpm-keyring-unlock`, `sudo tpm2_evictcontrol -C o -c 0x81018000`).
 
 ## AMD NPU
 

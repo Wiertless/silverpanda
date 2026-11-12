@@ -5,7 +5,7 @@ VIRSH=(/usr/bin/virsh --connect qemu:///system)
 DEFAULT_NETWORK_XML=/usr/share/libvirt/networks/default.xml
 
 if [[ ! -r "$DEFAULT_NETWORK_XML" ]]; then
-  echo "Silverpanda: libvirt default network XML is missing: $DEFAULT_NETWORK_XML" >&2
+  echo "SilverPanda: libvirt default network XML is missing: $DEFAULT_NETWORK_XML" >&2
   exit 1
 fi
 
