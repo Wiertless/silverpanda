@@ -110,11 +110,16 @@ rm -rf ~/.local/share/tpm-keyring-unlock && sudo tpm2_evictcontrol -C o -c 0x810
 
 ## Zed C/C++ toolbox
 
-The host image has no compiler headers, so a host clangd reports `'iostream' file not found`. SilverPanda instead ships `/usr/bin/clangd` as a wrapper that runs the real clangd inside a toolbox named `zed` (Fedora's default toolbox image, matching the host release) with `clang-tools-extra`, `gcc-c++`, `cmake`, `make` and `gdb`. Zed uses clangd from `PATH` when it finds one, so no Zed settings are needed.
+The host image has no compiler headers, so a host clangd reports `'iostream' file not found`. SilverPanda instead ships `/usr/bin/clangd` as a wrapper that runs the real clangd inside a toolbox named `zed` (Fedora's default toolbox image, matching the host release) with `clang-tools-extra`, `gcc-c++`, `cmake`, `make`, `gdb` and `fish`. Zed uses clangd from `PATH` when it finds one, so no Zed settings are needed.
 
 The toolbox is created on first login by the `silverpanda-zed-toolbox` user service, or on the first clangd start if that has not finished yet. It downloads the toolbox image and packages, so the first start can take a few minutes. Check progress with `journalctl --user -u silverpanda-zed-toolbox`.
 
 - Build and run your code in the same toolbox (`toolbox enter zed`) so it uses the headers clangd sees. Install more libraries there with `sudo dnf install ...`.
+- To make Zed's built-in terminal open in that toolbox, add this to `~/.config/zed/settings.json`:
+
+  ```json
+  "terminal": { "shell": { "with_arguments": { "program": "/usr/bin/toolbox", "args": ["enter", "zed"] } } }
+  ```
 - Projects with a `compile_commands.json` (CMake: `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`) get the most accurate results.
 - To rebuild the toolbox from scratch, remove it with `toolbox rm --force zed` and restart Zed.
 - Layering `clang-tools-extra` on the host would conflict with the wrapper; install it in the toolbox instead.

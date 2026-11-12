@@ -5,7 +5,7 @@
 set -euo pipefail
 
 CONTAINER=zed
-PACKAGES=(clang-tools-extra gcc-c++ cmake make gdb)
+PACKAGES=(clang-tools-extra gcc-c++ cmake make gdb fish)
 
 # Only for regular users on the host: not inside a container, and not for
 # GDM's greeter or other system/dynamic users, which also get a user manager.
