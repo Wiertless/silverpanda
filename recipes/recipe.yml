@@ -4,9 +4,7 @@ name: silverpanda
 description: Personal Fedora Silverblue image with KVM, TPM-assisted LUKS unlock and AMD NPU support.
 
 base-image: ghcr.io/ublue-os/silverblue-main
-# Pin the Fedora major version. Bump it deliberately once every third-party
-# repo below publishes builds for the new release.
-image-version: 45
+image-version: latest
 
 modules:
   # Keep the base ID (fedora): installer/ISO tooling looks up Fedora package
