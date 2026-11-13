@@ -39,10 +39,6 @@ jobs:
         run: |
           set -euo pipefail
           v=$(awk '$1 == "image-version:" { print $2 }' recipes/recipe.yml)
-          if [[ ! "$v" =~ ^[0-9]+$ ]]; then
-            echo "image-version in recipes/recipe.yml is not a number: '$v'" >&2
-            exit 1
-          fi
           echo "fedora=$v" >> "$GITHUB_OUTPUT"
 
       - name: Build
