@@ -34,23 +34,34 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Read Fedora version from the recipe
+      - name: Read the base tag from the recipe
         id: ver
         run: |
           set -euo pipefail
           v=$(awk '$1 == "image-version:" { print $2 }' recipes/recipe.yml)
-          echo "fedora=$v" >> "$GITHUB_OUTPUT"
+          if [[ ! "$v" =~ ^([0-9]+|latest)$ ]]; then
+            echo "image-version in recipes/recipe.yml must be a number or 'latest': '$v'" >&2
+            exit 1
+          fi
+          echo "base=$v" >> "$GITHUB_OUTPUT"
 
       - name: Build
         env:
-          FEDORA: ${{ steps.ver.outputs.fedora }}
-        run: podman build --pull=always --build-arg "FEDORA_VERSION=$FEDORA" -t "$IMAGE:$FEDORA" toolbox
+          BASE: ${{ steps.ver.outputs.base }}
+        run: podman build --pull=always --build-arg "FEDORA_VERSION=$BASE" -t "$IMAGE:build" toolbox
+
+      - name: Read the Fedora version of the built image
+        id: fedora
+        run: |
+          set -euo pipefail
+          v=$(podman run --rm "$IMAGE:build" sh -c '. /etc/os-release; printf %s "$VERSION_ID"')
+          [[ "$v" =~ ^[0-9]+$ ]] || { echo "unexpected VERSION_ID: '$v'" >&2; exit 1; }
+          echo "Fedora $v"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
 
       - name: Smoke test (clangd, compile and run C++)
-        env:
-          FEDORA: ${{ steps.ver.outputs.fedora }}
         run: |
-          podman run --rm "$IMAGE:$FEDORA" sh -euc '
+          podman run --rm "$IMAGE:build" sh -euc '
             clangd --version | head -1
             printf "#include <iostream>\nint main() { std::cout << \"ok\\\\n\"; }\n" > /tmp/t.cpp
             g++ -O2 /tmp/t.cpp -o /tmp/t && /tmp/t
@@ -61,13 +72,15 @@ jobs:
         if: github.event_name != 'pull_request'
         id: push
         env:
-          FEDORA: ${{ steps.ver.outputs.fedora }}
+          FEDORA: ${{ steps.fedora.outputs.version }}
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           printf '%s' "$REGISTRY_TOKEN" | podman login ghcr.io -u "$REGISTRY_USER" --password-stdin
-          podman tag "$IMAGE:$FEDORA" "$IMAGE:latest"
+          # The setup script pulls :<host VERSION_ID>; tag by the real Fedora version.
+          podman tag "$IMAGE:build" "$IMAGE:$FEDORA"
+          podman tag "$IMAGE:build" "$IMAGE:latest"
           podman push --digestfile digest "$IMAGE:$FEDORA"
           podman push "$IMAGE:latest"
           echo "digest=$(cat digest)" >> "$GITHUB_OUTPUT"
