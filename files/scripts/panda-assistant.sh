@@ -4,8 +4,8 @@
 # release. Bump VERSION and SHA256 together to update it.
 set -euo pipefail
 
-VERSION=0.1.1
-SHA256=82048eddd19d31c15253774ea14216ecac63fdb72fb516394c01434f6cf59f08
+VERSION=0.7.0
+SHA256=b4cb4d0903cc7f87e817cabcebd6fc87b55427938d54c63a76bb9fbea6f90e27
 
 url="https://github.com/Wiertless/panda-assistant/releases/download/v${VERSION}/panda-assistant-${VERSION}.tar.gz"
 work=$(mktemp -d)
