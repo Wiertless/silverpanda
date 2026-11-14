@@ -129,7 +129,7 @@ The default firewalld zone is `public` (SSH, mDNS and DHCPv6 client only) instea
 
 ## Assistant (NPU)
 
-[Assistant](https://github.com/Wiertless/panda-assistant) (`panda-assistant`) is a GNOME app that runs a model on the NPU through FastFlowLM. It can open apps and files, change settings, connect devices, look at the screen, run commands in the `zed` toolbox, and use other apps' tools over MCP. It also has memory, skills and chat history. Type anything in the overview search and pick **Ask: …**: the answer comes as a notification, without opening the window. The image installs a pinned release: bump `VERSION` and `SHA256` in [`files/scripts/panda-assistant.sh`](files/scripts/panda-assistant.sh) to update it.
+[Assistant](https://github.com/Wiertless/panda-assistant) (`panda-assistant`) is a GNOME app that runs a model on the NPU through FastFlowLM. It can open apps and files, change settings, connect devices, look at the screen, run commands in the `zed` toolbox, and use other apps' tools over MCP. It also has memory, skills and chat history. Type anything in the overview search and pick **Ask: …**: the answer comes as a notification, without opening the window. The model and tools run in a small background service, `assistantd` (Rust), which the session bus starts on demand. The image installs a pinned release: bump `VERSION` and `SHA256` in [`files/scripts/panda-assistant.sh`](files/scripts/panda-assistant.sh) to update it.
 
 ## AMD NPU
 
