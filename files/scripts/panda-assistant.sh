@@ -4,8 +4,8 @@
 # release. Bump VERSION and SHA256 together to update it.
 set -euo pipefail
 
-VERSION=0.9.0
-SHA256=c14be277221d4e4c0c23252a3340a0975d531728d0d810d5079b700f40777d15
+VERSION=0.10.0
+SHA256=ddaafcecbb7909d6b40e96d1ec4a7115fa7019784374ce550cbd158a2f7a37f4
 
 url="https://github.com/Wiertless/panda-assistant/releases/download/v${VERSION}/panda-assistant-${VERSION}.tar.gz"
 work=$(mktemp -d)
@@ -15,6 +15,10 @@ curl -fsSL --retry 3 -o "$work/panda.tar.gz" "$url"
 echo "${SHA256}  $work/panda.tar.gz" | sha256sum -c -
 tar -xzf "$work/panda.tar.gz" -C "$work"
 "$work/panda-assistant-${VERSION}/install.sh" /usr
+
+# The background service is a prebuilt binary: make sure it runs on this
+# image (all its libraries are here) before the image ships.
+/usr/libexec/panda-assistant/assistantd --version
 
 # /usr is read-only on the booted system: precompile now and refresh the
 # icon cache so the app icon shows in the overview and search results.
