@@ -1,5 +1,0 @@
-# Framework Laptop 13 (AMD) Goodix fingerprint reader. It ships with USB
-# persist off, which left the lock screen without fingerprint after some
-# resumes. Persist keeps its USB session across suspend at no power cost;
-# runtime autosuspend is left as is.
-ACTION=="add|change", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="27c6", ATTR{idProduct}=="609c", ATTR{power/persist}="1"

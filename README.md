@@ -33,7 +33,7 @@ To rebase an existing atomic Fedora installation to the latest build:
   systemctl reboot
   ```
 
-The `latest` tag always points to the newest build. Each build uses the Fedora major version pinned by `image-version` in `recipes/recipe.yml`, so a new Fedora release only arrives when that value is bumped.
+The `latest` tag always points to the newest build. `image-version` in `recipes/recipe.yml` is `latest`, so builds follow the newest Fedora release the base image offers; set it to a number (e.g. `45`) to stay on one release.
 
 ## ISO
 
