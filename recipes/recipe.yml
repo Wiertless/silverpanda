@@ -40,6 +40,10 @@ modules:
         - tailscale
         - zed
         - helium-bin
+        # Panda (NPU assistant app) runtime
+        - python3-gobject
+        - gtk4
+        - libadwaita
     remove:
       packages:
         - firefox
@@ -89,6 +93,8 @@ modules:
   - type: script
     scripts:
       - firewalld-default-zone.sh
+      # Pinned release of github.com/Wiertless/panda-assistant
+      - panda-assistant.sh
 
   - type: signing
 

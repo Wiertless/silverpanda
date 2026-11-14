@@ -127,6 +127,10 @@ Nothing is downloaded until it's needed: the toolbox is created the first time s
 
 The default firewalld zone is `public` (SSH, mDNS and DHCPv6 client only) instead of Fedora Workstation's zone, which accepts incoming connections on ports 1025–65535. Open what you need per service, e.g. `sudo firewall-cmd --permanent --add-service=kdeconnect && sudo firewall-cmd --reload`. The `tailscale0` interface is in the `trusted` zone, so the tailnet is not filtered; Tailscale ACLs control who can reach the machine. If you changed `/etc/firewalld/firewalld.conf` yourself, your copy is kept; set the zone with `sudo firewall-cmd --set-default-zone=public`.
 
+## Panda (NPU assistant)
+
+[Panda](https://github.com/Wiertless/panda-assistant) is a GNOME app that chats with a model on the NPU through FastFlowLM and can open apps, files and websites, change settings and read system info. Type anything in the overview search and pick **Ask: …** to send it to Panda. The image installs a pinned release: bump `VERSION` and `SHA256` in [`files/scripts/panda-assistant.sh`](files/scripts/panda-assistant.sh) to update it.
+
 ## AMD NPU
 
 `recipes/ai-npu.yml` installs the XDNA2 userspace from the `abn/amd-npu` COPR and keeps Fedora's signed kernel driver. A udev rule gives the logged-in user (and the `render` group) access to `/dev/accel/*`. Locked memory is unlimited for members of the `render` group only (PAM sessions and the systemd user manager, so graphical apps too). Add your user to it once, then reboot (logging out is not enough: the systemd user manager keeps running with the old groups). On Silverblue the group lives in `/usr/lib/group`, so copy it to `/etc/group` first:
