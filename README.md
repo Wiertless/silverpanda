@@ -127,9 +127,9 @@ Nothing is downloaded until it's needed: the toolbox is created the first time s
 
 The default firewalld zone is `public` (SSH, mDNS and DHCPv6 client only) instead of Fedora Workstation's zone, which accepts incoming connections on ports 1025–65535. Open what you need per service, e.g. `sudo firewall-cmd --permanent --add-service=kdeconnect && sudo firewall-cmd --reload`. The `tailscale0` interface is in the `trusted` zone, so the tailnet is not filtered; Tailscale ACLs control who can reach the machine. If you changed `/etc/firewalld/firewalld.conf` yourself, your copy is kept; set the zone with `sudo firewall-cmd --set-default-zone=public`.
 
-## Panda (NPU assistant)
+## Assistant (NPU)
 
-[Panda](https://github.com/Wiertless/panda-assistant) is a GNOME app that chats with a model on the NPU through FastFlowLM and can open apps, files and websites, change settings and read system info. Type anything in the overview search and pick **Ask: …** to send it to Panda. The image installs a pinned release: bump `VERSION` and `SHA256` in [`files/scripts/panda-assistant.sh`](files/scripts/panda-assistant.sh) to update it.
+[Assistant](https://github.com/Wiertless/panda-assistant) (`panda-assistant`) is a GNOME app that runs a model on the NPU through FastFlowLM. It can open apps and files, change settings, connect devices, look at the screen, run commands in the `zed` toolbox, and use other apps' tools over MCP. It also has memory, skills and chat history. Type anything in the overview search and pick **Ask: …**: the answer comes as a notification, without opening the window. The image installs a pinned release: bump `VERSION` and `SHA256` in [`files/scripts/panda-assistant.sh`](files/scripts/panda-assistant.sh) to update it.
 
 ## AMD NPU
 
