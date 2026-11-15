@@ -22,6 +22,15 @@ tar -xzf "$work/panda.tar.gz" -C "$work"
 /usr/libexec/panda-assistant/assistantd --version
 /usr/bin/panda-assistant --version
 
+# Assistant's clipboard history extension, on by default (users can turn it
+# off in the Extensions app). Only Assistant's service can read it.
+cat > /usr/share/glib-2.0/schemas/zz1-panda-assistant.gschema.override <<'OVERRIDE'
+[org.gnome.shell]
+enabled-extensions=['clipboard@assistant.wiertless.github.io']
+OVERRIDE
+test -f /usr/share/gnome-shell/extensions/clipboard@assistant.wiertless.github.io/metadata.json
+glib-compile-schemas /usr/share/glib-2.0/schemas
+
 # /usr is read-only on the booted system: refresh the icon cache now so the
 # app icon shows in the overview and search results.
 gtk-update-icon-cache -f -t /usr/share/icons/hicolor
