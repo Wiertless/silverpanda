@@ -40,16 +40,15 @@ modules:
         - tailscale
         - zed
         - helium-bin
-        # Assistant (NPU assistant app) runtime: UI, plus the GNOME services it reads
-        # (accessibility, the LocalSearch index, calendar/contacts). All are normally
-        # in Silverblue already; listing them keeps the app working if that changes.
-        - python3-gobject
+        # Assistant (NPU assistant app) runtime: the window's toolkit, plus the GNOME
+        # services it reads (accessibility, the LocalSearch index, contacts). All are
+        # normally in Silverblue already; listing them keeps the app working if that
+        # changes. It has no Python dependency.
         - gtk4
         - libadwaita
         - at-spi2-core
         - tinysparql
         - evolution-data-server
-        - libical-glib
     remove:
       packages:
         - firefox
