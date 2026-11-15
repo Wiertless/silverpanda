@@ -5,8 +5,8 @@
 # binaries. Bump VERSION and SHA256 together to update it.
 set -euo pipefail
 
-VERSION=0.13.1
-SHA256=2208816213a7544fd04be4a9a9c56a54e20a02ccc47f8a8a6efc5f7b3f9d9f38
+VERSION=0.14.0
+SHA256=916d52a180f0755226670a1473f9ad0574e32f3b9bb13ae671bc112430b63078
 
 url="https://github.com/Wiertless/panda-assistant/releases/download/v${VERSION}/panda-assistant-${VERSION}.tar.gz"
 work=$(mktemp -d)
@@ -21,6 +21,15 @@ tar -xzf "$work/panda.tar.gz" -C "$work"
 # libraries are here) before the image ships.
 /usr/libexec/panda-assistant/assistantd --version
 /usr/bin/panda-assistant --version
+
+# Assistant's clipboard history extension, on by default (users can turn it
+# off in the Extensions app). Only Assistant's service can read it.
+cat > /usr/share/glib-2.0/schemas/zz1-panda-assistant.gschema.override <<'OVERRIDE'
+[org.gnome.shell]
+enabled-extensions=['clipboard@assistant.wiertless.github.io']
+OVERRIDE
+test -f /usr/share/gnome-shell/extensions/clipboard@assistant.wiertless.github.io/metadata.json
+glib-compile-schemas /usr/share/glib-2.0/schemas
 
 # /usr is read-only on the booted system: refresh the icon cache now so the
 # app icon shows in the overview and search results.
