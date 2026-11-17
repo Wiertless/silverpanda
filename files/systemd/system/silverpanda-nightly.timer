@@ -1,14 +1,10 @@
 [Unit]
-Description=Wake SilverPanda at night to install updates
+Description=Wake SilverPanda at night to restart into a staged update
 
 [Timer]
-# Wakes the laptop from sleep (an RTC alarm), unlike the base image's update
-# timers, which only run while it's awake.
+# Started by silverpanda-nightly.path only while an update is staged, so the
+# laptop isn't woken on nights with nothing to install. WakeSystem sets an RTC
+# alarm, so it fires from sleep.
 OnCalendar=*-*-* 04:20
 WakeSystem=true
 AccuracySec=1min
-# A night it was off is skipped; the base image's timers catch up when it's on.
-Persistent=false
-
-[Install]
-WantedBy=timers.target

@@ -1,13 +1,14 @@
 #!/usr/bin/bash
-# Woken at night by silverpanda-nightly.timer: on mains power, install updates
-# (the base image's own update services), reboot into a staged image if
-# nothing is open, then go back to sleep. On battery it goes straight back to
-# sleep. It only suspends or reboots when nobody is using the laptop: the lid
-# is closed, or every session is still locked (GNOME locks it when it sleeps),
-# so someone who opened it and logged in is never interrupted.
+# Woken at night by silverpanda-nightly.timer, which runs only while an image
+# update is staged (silverpanda-nightly.path). Restarts into the update when
+# the battery is above 50% or it's plugged in, nobody is using the laptop and
+# no apps are open, then goes back to sleep. Otherwise it goes back to sleep
+# and tries again the next night. Nothing is downloaded at night: the base
+# image's update timers stage updates while the laptop is awake.
 set -uo pipefail
 
 MARKER=/var/lib/silverpanda/nightly-reboot
+MIN_BATTERY=50
 
 log() { echo "silverpanda-nightly: $*"; }
 
@@ -19,6 +20,18 @@ on_mains() {
     fi
   done
   return 1
+}
+
+# The lowest battery level, or 100 with no battery.
+battery() {
+  local s level=100 c
+  for s in /sys/class/power_supply/*; do
+    if [[ $(cat "$s/type" 2>/dev/null) == Battery ]]; then
+      c=$(cat "$s/capacity" 2>/dev/null || echo 0)
+      ((c < level)) && level=$c
+    fi
+  done
+  echo "$level"
 }
 
 lid_closed() {
@@ -35,6 +48,7 @@ user_sessions() {
   done
 }
 
+# Lid closed, or every session still locked (GNOME locks it when it sleeps).
 nobody_using() {
   local s
   lid_closed && return 0
@@ -94,27 +108,22 @@ if [[ ${1:-} == --after-reboot ]]; then
   exit 0
 fi
 
-if ! on_mains; then
-  log "on battery: back to sleep without updating"
+if ! staged; then
+  log "nothing staged any more"
+  systemctl stop silverpanda-nightly.timer
   back_to_sleep
   exit 0
 fi
 
-if nm-online -q -t 90; then
-  log "updating"
-  # The base image's own services: they skip metered connections and stage the new image.
-  timeout 30m systemctl start rpm-ostreed-automatic.service || log "image update failed"
-  timeout 10m systemctl start flatpak-system-update.service || log "flatpak update failed"
-  for user in $(loginctl list-users --no-legend | awk '{print $2}'); do
-    timeout 10m systemctl --user -M "$user@" start flatpak-user-update.service ||
-      log "flatpak update for $user failed"
-  done
+level=$(battery)
+if ! on_mains && ((level <= MIN_BATTERY)); then
+  log "battery at ${level}%: trying again tomorrow night"
+elif ! nobody_using; then
+  log "in use: trying again tomorrow night"
+elif apps_open; then
+  log "apps are open: trying again tomorrow night"
 else
-  log "no network"
-fi
-
-if staged && nobody_using && on_mains && ! apps_open; then
-  log "update staged and nothing open: rebooting into it"
+  log "restarting into the staged update (battery ${level}%)"
   mkdir -p "$(dirname "$MARKER")"
   touch "$MARKER"
   systemctl reboot

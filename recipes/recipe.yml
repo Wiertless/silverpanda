@@ -90,9 +90,9 @@ modules:
         - silverpanda-libvirt-network.service
         - silverpanda-firstboot-luks-tpm.service
         - silverpanda-remove-tpm-keyring-selinux.service
-        # Wake at night to update (on mains power), reboot into a staged image
-        # when nothing is open, and go back to sleep.
-        - silverpanda-nightly.timer
+        # While an update is staged: wake at night, restart into it (battery
+        # above 50% or plugged in, nothing open), and go back to sleep.
+        - silverpanda-nightly.path
         - silverpanda-after-update.service
 
   # files/system/etc/dracut.conf.d enables the TPM2 dracut module. Rebuild the
