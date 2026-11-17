@@ -24,11 +24,12 @@ trap 'rm -rf "$work"' EXIT
 curl -fsSL --retry 3 -o "$work/lemonade.rpm" "$url"
 echo "${SHA256}  $work/lemonade.rpm" | sha256sum -c -
 
-# The libraries it links against (all from Fedora).
-dnf install -y libcurl libwebsockets brotli libdrm libgomp libcap openssl-libs zlib-ng-compat
+# The libraries it links against (all from Fedora), and cpio to unpack it.
+dnf install -y libcurl libwebsockets brotli libdrm libgomp libcap openssl-libs zlib-ng-compat cpio
 
 mkdir -p "$work/root" "$PREFIX"
-(cd "$work" && rpm2archive lemonade.rpm && tar -xzf lemonade.rpm.tgz -C root)
+rpm2cpio "$work/lemonade.rpm" | (cd "$work/root" && cpio -idm --quiet)
+test -x "$work/root/opt/bin/lemond"
 cp -a "$work/root/opt/bin" "$work/root/opt/share" "$PREFIX/"
 ln -sf "$PREFIX/bin/lemond" /usr/bin/lemond
 ln -sf "$PREFIX/bin/lemonade" /usr/bin/lemonade
