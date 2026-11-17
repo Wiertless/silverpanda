@@ -1,0 +1,11 @@
+[Unit]
+Description=Go back to sleep after a night-time reboot into an update
+ConditionPathExists=/var/lib/silverpanda/nightly-reboot
+After=graphical.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/silverpanda/nightly-update.sh --after-reboot
+
+[Install]
+WantedBy=graphical.target

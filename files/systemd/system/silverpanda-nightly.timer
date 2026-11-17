@@ -1,0 +1,14 @@
+[Unit]
+Description=Wake SilverPanda at night to install updates
+
+[Timer]
+# Wakes the laptop from sleep (an RTC alarm), unlike the base image's update
+# timers, which only run while it's awake.
+OnCalendar=*-*-* 04:20
+WakeSystem=true
+AccuracySec=1min
+# A night it was off is skipped; the base image's timers catch up when it's on.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

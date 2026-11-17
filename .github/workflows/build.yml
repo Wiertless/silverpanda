@@ -1,7 +1,10 @@
 name: bluebuild
 on:
   schedule:
-    - cron: "00 06 * * *" # daily at 06:00 UTC, after the ublue base images build
+    # Weekly, Monday 06:00 UTC (after the ublue base images build). Pushes to main
+    # build at once, and security-rebuild.yml starts a build early when Fedora
+    # ships a critical or important security fix the image doesn't have yet.
+    - cron: "00 06 * * 1"
   push:
     branches: [main] # PR branches are built by the pull_request trigger
     paths-ignore:

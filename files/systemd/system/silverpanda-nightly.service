@@ -1,0 +1,8 @@
+[Unit]
+Description=Install updates at night and go back to sleep
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/silverpanda/nightly-update.sh
+TimeoutStartSec=45min
