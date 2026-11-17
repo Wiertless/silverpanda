@@ -5,8 +5,8 @@
 # binaries. Bump VERSION and SHA256 together to update it.
 set -euo pipefail
 
-VERSION=0.23.0
-SHA256=088cf4607de0d36033a70dc0700b2188618aa9035064bc5770c7a2d0df0f2cd1
+VERSION=0.25.0
+SHA256=70aea5f9c7bb95614f5045dfb6d3b5d22e627f3d811c27173277acc0d0ca36a1
 
 url="https://github.com/Wiertless/panda-assistant/releases/download/v${VERSION}/panda-assistant-${VERSION}.tar.gz"
 work=$(mktemp -d)
@@ -30,6 +30,25 @@ enabled-extensions=['clipboard@assistant.wiertless.github.io']
 OVERRIDE
 test -f /usr/share/gnome-shell/extensions/clipboard@assistant.wiertless.github.io/metadata.json
 glib-compile-schemas /usr/share/glib-2.0/schemas
+
+# Super+Space opens Assistant's pop-up. With one keyboard layout that key does
+# nothing in GNOME (it switches input sources), so it moves to the keyboard's
+# layout key only. Defaults in a system dconf database: users can change both.
+mkdir -p /etc/dconf/db/local.d
+cat > /etc/dconf/db/local.d/50-panda-assistant <<'DCONF'
+[org/gnome/settings-daemon/plugins/media-keys]
+custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/panda-assistant/']
+
+[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/panda-assistant]
+name='Assistant'
+command='panda-assistant --popup'
+binding='<Super>space'
+
+[org/gnome/desktop/wm/keybindings]
+switch-input-source=['XF86Keyboard']
+switch-input-source-backward=['<Shift>XF86Keyboard']
+DCONF
+dconf update
 
 # /usr is read-only on the booted system: refresh the icon cache now so the
 # app icon shows in the overview and search results.
