@@ -100,6 +100,8 @@ modules:
       - firewalld-default-zone.sh
       # Pinned release of github.com/Wiertless/panda-assistant
       - panda-assistant.sh
+      # Pinned release of Lemonade Server, which Assistant uses when present
+      - lemonade.sh
 
   - type: signing
 
