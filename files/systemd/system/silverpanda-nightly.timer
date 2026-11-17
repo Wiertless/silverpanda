@@ -1,0 +1,10 @@
+[Unit]
+Description=Wake SilverPanda at night to restart into a staged update
+
+[Timer]
+# Started by silverpanda-nightly.path only while an update is staged, so the
+# laptop isn't woken on nights with nothing to install. WakeSystem sets an RTC
+# alarm, so it fires from sleep.
+OnCalendar=*-*-* 04:20
+WakeSystem=true
+AccuracySec=1min

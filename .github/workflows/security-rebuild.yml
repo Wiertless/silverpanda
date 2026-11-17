@@ -1,0 +1,48 @@
+name: security-rebuild
+# Daily: build the image early when Fedora has a critical or important security
+# update for a package in it. Otherwise images are built weekly and on pushes.
+on:
+  schedule:
+    - cron: "30 07 * * *" # after the ublue base images build
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write # to start the build
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Look for security updates the published image lacks
+        id: check
+        run: |
+          set -euo pipefail
+          image=ghcr.io/wiertless/silverpanda:latest
+          podman pull -q "$image" >/dev/null
+          # The image's own repos and package database answer it: dnf lists the
+          # updates it would install. The kernel comes from the base image (signed,
+          # with its modules), so a kernel fix waits for ublue's next base build.
+          set +e
+          podman run --rm "$image" dnf5 -q check-upgrade --refresh --security \
+            --advisory-severities=critical,important --exclude='kernel*' > updates.txt
+          code=$?
+          set -e
+          cat updates.txt
+          case $code in
+            0) echo "found=false" >> "$GITHUB_OUTPUT" ;;
+            100) echo "found=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "dnf failed ($code)"; exit 1 ;;
+          esac
+      - name: Build the image now
+        if: steps.check.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### Security updates found"
+            echo '```'
+            cat updates.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref main

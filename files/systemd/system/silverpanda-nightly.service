@@ -1,0 +1,6 @@
+[Unit]
+Description=Restart into a staged update at night and go back to sleep
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/silverpanda/nightly-update.sh

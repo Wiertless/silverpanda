@@ -1,0 +1,11 @@
+[Unit]
+Description=Arm the night-time restart while an update is staged
+
+[Path]
+# ostree writes this when an update is staged for the next boot
+# (rpm-ostreed-automatic stages them; so does `rpm-ostree upgrade`).
+PathExists=/run/ostree/staged-deployment
+Unit=silverpanda-nightly.timer
+
+[Install]
+WantedBy=multi-user.target

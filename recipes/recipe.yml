@@ -90,6 +90,10 @@ modules:
         - silverpanda-libvirt-network.service
         - silverpanda-firstboot-luks-tpm.service
         - silverpanda-remove-tpm-keyring-selinux.service
+        # While an update is staged: wake at night, restart into it (battery
+        # above 50% or plugged in, nothing open), and go back to sleep.
+        - silverpanda-nightly.path
+        - silverpanda-after-update.service
 
   # files/system/etc/dracut.conf.d enables the TPM2 dracut module. Rebuild the
   # initramfs in the image so it can use TPM2 tokens before mounting root.
@@ -97,6 +101,8 @@ modules:
 
   - type: script
     scripts:
+      # Critical and important security fixes the base image doesn't have yet
+      - security-updates.sh
       - firewalld-default-zone.sh
       # Pinned release of github.com/Wiertless/panda-assistant
       - panda-assistant.sh
