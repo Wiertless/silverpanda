@@ -11,6 +11,6 @@ LABEL org.opencontainers.image.source="https://github.com/wiertless/silverpanda"
 # One layer on top of the shared Fedora base. No weak dependencies and no
 # package caches; man pages and the full tools stay.
 RUN dnf -y install --setopt=install_weak_deps=False \
-        clang-tools-extra gcc-c++ make cmake ninja-build gdb git fish \
+        clang-tools-extra gcc-c++ make cmake ninja-build gdb git git-credential-libsecret fish \
     && dnf clean all \
     && rm -rf /var/cache/dnf /var/cache/libdnf5 /var/log/dnf*.log
