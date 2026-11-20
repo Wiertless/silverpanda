@@ -59,6 +59,12 @@ NoNewPrivileges=yes
 ProtectSystem=full
 RestrictRealtime=yes
 LockPersonality=yes
+# Models are most of the memory (Gemma 4 E2B on the NPU is ~5 GB with the
+# embedding model; two models at once can reach ~13 GB of 16). Past 8 GB the
+# kernel reclaims this service's cache first; at 9 GB it kills the model
+# server, which restarts, instead of the whole desktop freezing.
+MemoryHigh=8G
+MemoryMax=9G
 UNIT
 
 # Defaults for this image, on top of the package's:
