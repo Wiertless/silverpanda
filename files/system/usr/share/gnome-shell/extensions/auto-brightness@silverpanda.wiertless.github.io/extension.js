@@ -218,14 +218,20 @@ export default class AutoBrightness extends Extension {
         }
     }
 
-    // GNOME Shell shows clamp(target + slider − 0.5): with a low automatic level
-    // the bottom of the slider all comes out as 0 and the brightness keys seem to
-    // do nothing (the top, likewise, in bright light). Pass the target that makes
-    // the slider span it all instead: its middle is the automatic level, its ends
-    // darkest and brightest, every step visible.
+    // GNOME Shell shows clamp(target + slider − 0.5). That shift keeps the
+    // reaction to the room as big at any slider position, but with a low
+    // automatic level the bottom of the slider all comes out as 0 and the
+    // brightness keys seem to do nothing (the top, likewise, in bright light).
+    // Scaling instead (slider ends = darkest and brightest) keeps every step
+    // visible but shrinks the reaction far from the middle. So: the shift, and
+    // the scaling only where the shift would hit 0 or 1 (both rise with the
+    // slider, so every key press still shows).
     _shellTarget(auto) {
         const s = this._manager.globalScale?.value ?? 0.5;
-        const shown = s < 0.5 ? auto * s / 0.5 : auto + (1 - auto) * (s - 0.5) / 0.5;
+        const shifted = auto + s - 0.5;
+        const shown = s < 0.5
+            ? Math.max(shifted, auto * s / 0.5)
+            : Math.min(shifted, auto + (1 - auto) * (s - 0.5) / 0.5);
         return Math.clamp(shown - s + 0.5, 0, 1);
     }
 
