@@ -186,6 +186,7 @@ function curveEditor(settings, getLux) {
             const [, logical] = layout.get_pixel_extents();
             cr.moveTo(tx - logical.width * align, ty - logical.height / 2);
             PangoCairo.show_layout(cr, layout);
+            cr.newPath(); // or the next shape starts with a line from here
         };
 
         // Room on the left for the widest percent label.
@@ -245,9 +246,11 @@ function curveEditor(settings, getLux) {
         cr.setLineWidth(2.5);
         cr.stroke();
 
-        // The points to drag; the one in hand shows its value.
+        // The points to drag; the one in hand shows its value (drawn last, on top).
+        let label = null;
         BANDS.forEach((l, i) => {
             const active = i === dragging || (dragging < 0 && i === hover);
+            cr.newSubPath();
             cr.arc(x(l), y(points[i]), active ? POINT_RADIUS + 2 : POINT_RADIUS, 0, 2 * Math.PI);
             cr.setSourceRGBA(accent.red, accent.green, accent.blue, 1);
             cr.fillPreserve();
@@ -259,9 +262,11 @@ function curveEditor(settings, getLux) {
             cr.setLineWidth(2.5);
             cr.stroke();
             if (active) {
-                ink(0.9);
-                text(`${Math.round(points[i] * 100)}% · ${l} lx`, x(l), y(points[i]) - 18,
-                    i === 0 ? 0.15 : i === BANDS.length - 1 ? 0.85 : 0.5, true);
+                // Above the point, or under it when there's no room above.
+                const py = y(points[i]);
+                label = [`${Math.round(points[i] * 100)}% · ${l} lx`, x(l),
+                    py - 20 < box.top ? py + 20 : py - 20,
+                    i === 0 ? 0.1 : i === BANDS.length - 1 ? 0.9 : 0.5];
             }
         });
 
@@ -275,8 +280,14 @@ function curveEditor(settings, getLux) {
             cr.lineTo(px, h - box.bottom);
             cr.stroke();
             ink(0.95);
+            cr.newSubPath();
             cr.arc(px, py, 5, 0, 2 * Math.PI);
             cr.fill();
+        }
+
+        if (label) {
+            ink(0.95);
+            text(label[0], label[1], label[2], label[3], true);
         }
         cr.$dispose();
     });
