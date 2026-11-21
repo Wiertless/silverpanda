@@ -5,6 +5,7 @@ import Adw from 'gi://Adw';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import Gtk from 'gi://Gtk';
+import Pango from 'gi://Pango';
 import PangoCairo from 'gi://PangoCairo';
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
@@ -77,10 +78,13 @@ function resetButton(onClick) {
 
 /** The curve to drag: points at fixed light levels, the room now as a dot. */
 function curveEditor(settings, getLux) {
-    const area = new Gtk.DrawingArea({content_height: 260, margin_top: 8, margin_bottom: 4, hexpand: true});
+    const area = new Gtk.DrawingArea({
+        content_height: 240, hexpand: true,
+        margin_top: 12, margin_bottom: 6, margin_start: 6, margin_end: 12,
+    });
     let points = readCurve(settings);
     let dragging = -1, hover = -1, lastWrite = 0, startY = 0;
-    const box = {left: 46, right: 18, top: 26, bottom: 30};
+    const box = {left: 40, right: 10, top: 12, bottom: 24};
 
     const geometry = () => {
         const w = area.get_width(), h = area.get_height();
@@ -167,15 +171,27 @@ function curveEditor(settings, getLux) {
     area.set_draw_func((_a, cr) => {
         const {w, h, x, y} = geometry();
         const fg = area.get_color();
-        const accent = Adw.StyleManager.get_default().get_accent_color_rgba();
+        const style = Adw.StyleManager.get_default();
+        const accent = style.get_accent_color_rgba();
         const ink = a => cr.setSourceRGBA(fg.red, fg.green, fg.blue, a);
-        const text = (s, tx, ty, align = 0.5) => {
-            const layout = PangoCairo.create_layout(cr);
-            layout.set_text(s, -1);
+        // The interface font at caption size, as the widget itself would draw it.
+        const font = area.get_pango_context().get_font_description().copy();
+        font.set_size(Math.round(font.get_size() * 0.75));
+        const text = (s, tx, ty, align = 0.5, bold = false) => {
+            const layout = area.create_pango_layout(s);
+            const f = font.copy();
+            if (bold)
+                f.set_weight(Pango.Weight.BOLD);
+            layout.set_font_description(f);
             const [, logical] = layout.get_pixel_extents();
             cr.moveTo(tx - logical.width * align, ty - logical.height / 2);
             PangoCairo.show_layout(cr, layout);
         };
+
+        // Room on the left for the widest percent label.
+        const probe = area.create_pango_layout('100%');
+        probe.set_font_description(font);
+        box.left = probe.get_pixel_extents()[1].width + 14;
 
         // Grid and labels.
         cr.setLineWidth(1);
@@ -189,7 +205,7 @@ function curveEditor(settings, getLux) {
             cr.lineTo(w - box.right, y(b));
         }
         cr.stroke();
-        ink(0.55);
+        ink(0.5);
         for (const [l, label] of [[0, '0'], [10, '10'], [100, '100'], [1000, '1000'], [10000, '10 000 lx']])
             text(label, x(l), h - box.bottom / 2, l === 10000 ? 0.85 : 0.5);
         for (const b of [0, 0.5, 1])
@@ -204,8 +220,8 @@ function curveEditor(settings, getLux) {
             cr.lineTo(kx, h - box.bottom);
             cr.stroke();
             cr.setDash([], 0);
-            ink(0.55);
-            text(_('keyboard off'), kx, box.top - 14);
+            ink(0.5);
+            text(_('keyboard off'), kx - 6, box.top + 10, 1);
         }
 
         // The curve, under it a light fill.
@@ -235,13 +251,17 @@ function curveEditor(settings, getLux) {
             cr.arc(x(l), y(points[i]), active ? POINT_RADIUS + 2 : POINT_RADIUS, 0, 2 * Math.PI);
             cr.setSourceRGBA(accent.red, accent.green, accent.blue, 1);
             cr.fillPreserve();
-            cr.setSourceRGBA(1, 1, 1, 0.9);
-            cr.setLineWidth(2);
+            // Outlined in the card's colour, so the points read on the line in light and dark.
+            if (style.dark)
+                cr.setSourceRGBA(0.21, 0.21, 0.23, 1);
+            else
+                cr.setSourceRGBA(1, 1, 1, 1);
+            cr.setLineWidth(2.5);
             cr.stroke();
             if (active) {
                 ink(0.9);
                 text(`${Math.round(points[i] * 100)}% · ${l} lx`, x(l), y(points[i]) - 18,
-                    i === 0 ? 0.15 : i === BANDS.length - 1 ? 0.85 : 0.5);
+                    i === 0 ? 0.15 : i === BANDS.length - 1 ? 0.85 : 0.5, true);
             }
         });
 
@@ -275,9 +295,8 @@ export default class AutoBrightnessPrefs extends ExtensionPreferences {
 
         // On/off is GNOME's own switch, so it's the same one Settings and Quick Settings show.
         const intro = new Adw.PreferencesGroup({
-            description: _('The screen follows the light in the room along the curve below. ' +
-                'The brightness slider and keys still work: in the middle the screen follows the curve exactly, ' +
-                'lower makes it darker than the curve, higher brighter, and it keeps following the room either way.'),
+            description: _('The screen follows the light in the room. The brightness slider still works: ' +
+                'below the middle the screen is darker than the curve, above it brighter.'),
         });
         const toggle = new Adw.SwitchRow({
             title: _('Automatic Screen Brightness'),
@@ -289,29 +308,25 @@ export default class AutoBrightnessPrefs extends ExtensionPreferences {
 
         const curve = new Adw.PreferencesGroup({
             title: _('Brightness Curve'),
-            description: _('Drag a point up or down to set how bright the screen is at that light level; ' +
-                'the screen follows as you drag. The line between points always rises. ' +
-                'The dot is the light in the room now.'),
+            description: _('Drag the points to set the brightness for each light level. The dot is the room now.'),
         });
         curve.set_header_suffix(resetButton(() => settings.reset('points')));
         const editor = curveEditor(settings, () => lux);
-        curve.add(new Gtk.Frame({child: editor, css_classes: ['card']}));
+        // A row of the group's list, so the graph and the rows under it are one card.
+        curve.add(new Adw.PreferencesRow({child: editor, activatable: false, selectable: false, focusable: false}));
         const room = new Adw.ActionRow({title: _('Light in the room'), subtitle: _('Waiting for the sensor…')});
         const roomValue = new Gtk.Label({css_classes: ['numeric', 'dim-label']});
         room.add_suffix(roomValue);
         curve.add(room);
         const response = spinRow(settings, 'response', _('Reaction time'),
-            _('Seconds the screen takes to catch up with a brighter room. ' +
-                'It dims three times slower, so a passing shadow doesn\'t darken it.'),
+            _('Seconds to catch up with a brighter room; dimming takes three times longer'),
             {min: 0.2, max: 10, step: 0.1, digits: 1});
         curve.add(response);
         page.add(curve);
 
         const keyboard = new Adw.PreferencesGroup({
             title: _('Keyboard Backlight'),
-            description: _('Lights the keyboard in the dark and turns it off in bright light (the dashed line on the curve). ' +
-                'If you change the keyboard brightness while it\'s lit (Fn key or Quick Settings), ' +
-                'that becomes its level in the dark.'),
+            description: _('On in the dark, off above the dashed line. Changing the keyboard brightness while it\'s lit sets its level.'),
         });
         keyboard.set_header_suffix(resetButton(() => KEYBOARD_KEYS.forEach(k => settings.reset(k))));
         const kbdToggle = new Adw.SwitchRow({
@@ -335,7 +350,7 @@ export default class AutoBrightnessPrefs extends ExtensionPreferences {
 
         const update = () => {
             const off = settings.get_int('keyboard-off-lux');
-            kbdOff.subtitle = _('Lux. It comes back on below {on} lux, so it doesn\'t flicker when the room is right at the edge.')
+            kbdOff.subtitle = _('Lux; back on below {on}')
                 .replace('{on}', String(Math.round(off * KEYBOARD_ON_SHARE)));
             if (lux !== null) {
                 room.subtitle = _('{lux} lux: {what}')

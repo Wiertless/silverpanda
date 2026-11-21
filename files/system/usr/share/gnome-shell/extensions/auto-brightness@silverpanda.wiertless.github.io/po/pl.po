@@ -43,8 +43,8 @@ msgstr "Przywróć domyślne"
 msgid "keyboard off"
 msgstr "klawiatura wył."
 
-msgid "The screen follows the light in the room along the curve below. The brightness slider and keys still work: in the middle the screen follows the curve exactly, lower makes it darker than the curve, higher brighter, and it keeps following the room either way."
-msgstr "Ekran dopasowuje się do światła w pokoju według krzywej poniżej. Suwak i klawisze jasności nadal działają: na środku ekran trzyma się krzywej dokładnie, niżej jest ciemniejszy od niej, wyżej jaśniejszy, i w każdym położeniu nadal reaguje na światło."
+msgid "The screen follows the light in the room. The brightness slider still works: below the middle the screen is darker than the curve, above it brighter."
+msgstr "Ekran dopasowuje się do światła w pokoju. Suwak jasności nadal działa: poniżej środka ekran jest ciemniejszy od krzywej, powyżej jaśniejszy."
 
 msgid "Automatic Screen Brightness"
 msgstr "Automatyczna jasność ekranu"
@@ -55,8 +55,8 @@ msgstr "Ten sam przełącznik co w Szybkich ustawieniach i w Ustawieniach → Za
 msgid "Brightness Curve"
 msgstr "Krzywa jasności"
 
-msgid "Drag a point up or down to set how bright the screen is at that light level; the screen follows as you drag. The line between points always rises. The dot is the light in the room now."
-msgstr "Przeciągnij punkt w górę lub w dół, by ustawić jasność ekranu przy danym poziomie światła; ekran zmienia się na bieżąco. Linia między punktami zawsze rośnie. Kropka to światło w pokoju w tej chwili."
+msgid "Drag the points to set the brightness for each light level. The dot is the room now."
+msgstr "Przeciągnij punkty, by ustawić jasność dla każdego poziomu światła. Kropka to pokój w tej chwili."
 
 msgid "Light in the room"
 msgstr "Światło w pokoju"
@@ -67,11 +67,11 @@ msgstr "Czekam na czujnik…"
 msgid "Reaction time"
 msgstr "Czas reakcji"
 
-msgid "Seconds the screen takes to catch up with a brighter room. It dims three times slower, so a passing shadow doesn't darken it."
-msgstr "Ile sekund ekran potrzebuje, by dogonić jaśniejszy pokój. Ściemnia się trzy razy wolniej, więc przelotny cień go nie przygasi."
+msgid "Seconds to catch up with a brighter room; dimming takes three times longer"
+msgstr "Sekundy na dogonienie jaśniejszego pokoju; ściemnianie trwa trzy razy dłużej"
 
-msgid "Lights the keyboard in the dark and turns it off in bright light (the dashed line on the curve). If you change the keyboard brightness while it's lit (Fn key or Quick Settings), that becomes its level in the dark."
-msgstr "Podświetla klawiaturę w ciemności i wyłącza podświetlenie przy jasnym świetle (przerywana linia na wykresie). Jeśli zmienisz jasność klawiatury, gdy jest podświetlona (klawiszem Fn albo w Szybkich ustawieniach), ta wartość stanie się jej poziomem w ciemności."
+msgid "On in the dark, off above the dashed line. Changing the keyboard brightness while it's lit sets its level."
+msgstr "Włączone w ciemności, wyłączone powyżej przerywanej linii. Zmiana jasności klawiatury, gdy świeci, ustawia jej poziom."
 
 msgid "Follows the room"
 msgstr "Dopasowuje się do pokoju"
@@ -88,8 +88,8 @@ msgstr "Jasność w ciemności"
 msgid "Percent"
 msgstr "W procentach"
 
-msgid "Lux. It comes back on below {on} lux, so it doesn't flicker when the room is right at the edge."
-msgstr "W luksach. Włącza się z powrotem poniżej {on} luksów, więc nie miga, gdy światło w pokoju jest na granicy."
+msgid "Lux; back on below {on}"
+msgstr "W luksach; włącza się ponownie poniżej {on}"
 
 msgid "{lux} lux: {what}"
 msgstr "{lux} lx: {what}"
