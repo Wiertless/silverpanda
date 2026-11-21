@@ -60,16 +60,46 @@ nobody_using() {
   return 0
 }
 
-# Apps open in anyone's session: what GNOME and Flatpak start as app-*.scope
-# units (autostarted background services are .service units, so they don't
-# count; neither does Assistant's window, whose chats are saved).
+# Apps open in anyone's session. GNOME runs an app as app-gnome-ID-PID.scope,
+# or, when it starts over D-Bus (Ptyxis, Nautilus…), as dbus-:1.N-ID@M.service.
+# Only units whose ID has a visible launcher count: background helpers
+# (autostart-only like DiskUtilityNotify, NoDisplay like CalendarServer,
+# D-Bus services with no launcher) don't, and Assistant's window doesn't, as
+# its chats are saved.
+app_id() {
+  local u=${1//\\x2d/-}
+  case $u in
+    app-gnome-*.scope | app-flatpak-*.scope) u=${u#app-gnome-}; u=${u#app-flatpak-}; u=${u%.scope}; echo "${u%-[0-9]*}" ;;
+    dbus-*@*.service) u=${u#dbus-:*-}; echo "${u%@*}" ;;
+  esac
+}
+
+has_launcher() {
+  local id=$1 home=$2 d f
+  for d in /usr/share/applications /usr/local/share/applications /var/lib/flatpak/exports/share/applications \
+    "$home/.local/share/applications" "$home/.local/share/flatpak/exports/share/applications"; do
+    f=$d/$id.desktop
+    if [[ -f $f ]]; then
+      grep -qiE '^(NoDisplay|Hidden)=true' "$f" && return 1
+      return 0
+    fi
+  done
+  return 1
+}
+
 apps_open() {
-  local user units
+  local user home unit id open
   for user in $(loginctl list-users --no-legend | awk '{print $2}'); do
-    units=$(systemctl --user -M "$user@" list-units --type=scope --state=running \
-      --no-legend --plain 'app-*' 2>/dev/null | awk '{print $1}' | grep -v PandaAssistant)
-    if [[ -n $units ]]; then
-      log "open for $user: $(echo "$units" | tr '\n' ' ')"
+    home=$(getent passwd "$user" | cut -d: -f6)
+    open=()
+    while read -r unit; do
+      id=$(app_id "$unit")
+      [[ -z $id || $id == *PandaAssistant* ]] && continue
+      has_launcher "$id" "$home" && open+=("$id")
+    done < <(systemctl --user -M "$user@" list-units --state=running --no-legend --plain 'app-*.scope' 'dbus-*@*.service' \
+      2>/dev/null | awk '{print $1}')
+    if (( ${#open[@]} )); then
+      log "open for $user: ${open[*]}"
       return 0
     fi
   done
