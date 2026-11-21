@@ -1,0 +1,11 @@
+[Unit]
+Description=Reconnect the ambient light sensor after sleep (it can wake up reading 0)
+ConditionPathExists=/sys/bus/i2c/devices/i2c-FRMW0005:00
+After=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/silverpanda/als-after-sleep.sh
+
+[Install]
+WantedBy=suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
