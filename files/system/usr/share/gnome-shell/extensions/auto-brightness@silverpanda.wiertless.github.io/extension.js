@@ -23,6 +23,12 @@ const KEYBOARD_ON_SHARE = 0.7;
 // Settings slider and toggle, the Settings app) and with the Fn key. Others
 // (gsd-power restoring or dimming it) don't count as the user's choice.
 const USER_SOURCES = ['set property', 'external'];
+// Sensor noise: a reading counts only if it differs from the last one used by
+// more than ~12% (about the smallest change in light people notice) and by at
+// least 3 lux (near darkness the sensor flickers between 0 and 2). Compared with
+// the last reading used, so a slow drift still gets through once it adds up.
+const NOISE_SHARE = 0.12;
+const NOISE_LUX = 3;
 
 const SensorProxy = Gio.DBusProxy.makeProxyWrapper(`
 <node>
@@ -192,8 +198,19 @@ export default class AutoBrightness extends Extension {
 
     _read() {
         const lux = this._proxy?.LightLevel;
-        this._lux = typeof lux === 'number' ? lux : null;
+        if (typeof lux !== 'number') {
+            this._lux = null;
+        } else if (this._lux === null || this._isChange(lux, this._lux)) {
+            this._lux = lux;
+        } else {
+            return; // noise
+        }
         this._update();
+    }
+
+    _isChange(lux, last) {
+        return Math.abs(lux - last) >= NOISE_LUX &&
+            Math.abs(lux - last) > NOISE_SHARE * Math.max(lux, last);
     }
 
     _update() {
