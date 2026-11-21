@@ -82,6 +82,11 @@ export default class AutoBrightness extends Extension {
         }
         this._manager = manager;
         this._applyTarget = v => setter.call(manager, v);
+        // The slider moved (brightness keys too): its bias changes with it.
+        manager.connectObject('user-update', () => {
+            if (this._current !== null)
+                this._applyTarget(this._shellTarget(this._current));
+        }, this);
         // What gsd-power sends over D-Bus is kept (and put back on disable), not applied.
         this._gsdTarget = manager.autoBrightnessTarget;
         Object.defineProperty(manager, 'autoBrightnessTarget', {
@@ -144,6 +149,7 @@ export default class AutoBrightness extends Extension {
         this._toggle.destroy();
         this._indicator.destroy();
         this._toggle = this._indicator = null;
+        this._manager.disconnectObject(this);
         this._stop();
         this._cancel.cancel();
         if (this._proxy) {
@@ -206,10 +212,21 @@ export default class AutoBrightness extends Extension {
         this._goal = target(this._lux, readCurve(this._settings));
         if (this._current === null) {
             this._current = this._goal;
-            this._applyTarget(this._current);
+            this._applyTarget(this._shellTarget(this._current));
         } else if (!this._tick) {
             this._tick = GLib.timeout_add(GLib.PRIORITY_DEFAULT, TICK_MS, () => this._step());
         }
+    }
+
+    // GNOME Shell shows clamp(target + slider − 0.5): with a low automatic level
+    // the bottom of the slider all comes out as 0 and the brightness keys seem to
+    // do nothing (the top, likewise, in bright light). Pass the target that makes
+    // the slider span it all instead: its middle is the automatic level, its ends
+    // darkest and brightest, every step visible.
+    _shellTarget(auto) {
+        const s = this._manager.globalScale?.value ?? 0.5;
+        const shown = s < 0.5 ? auto * s / 0.5 : auto + (1 - auto) * (s - 0.5) / 0.5;
+        return Math.clamp(shown - s + 0.5, 0, 1);
     }
 
     // Glide toward the goal: about 95% of the way in `response` seconds when
@@ -221,7 +238,7 @@ export default class AutoBrightness extends Extension {
         const done = Math.abs(this._goal - this._current) < 0.002;
         if (done)
             this._current = this._goal;
-        this._applyTarget(this._current);
+        this._applyTarget(this._shellTarget(this._current));
         if (done)
             this._tick = 0;
         return done ? GLib.SOURCE_REMOVE : GLib.SOURCE_CONTINUE;
