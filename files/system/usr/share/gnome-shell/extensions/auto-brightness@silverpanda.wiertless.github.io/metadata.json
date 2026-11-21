@@ -1,0 +1,8 @@
+{
+  "uuid": "auto-brightness@silverpanda.wiertless.github.io",
+  "name": "Auto Brightness",
+  "description": "Makes Automatic Screen Brightness follow the room: reads the light sensor and glides the screen brightness along a curve you can adjust. Uses GNOME's own switch in Settings → Power; the brightness slider still makes it brighter or darker than automatic.",
+  "shell-version": ["49", "50", "51", "52"],
+  "settings-schema": "org.gnome.shell.extensions.silverpanda-auto-brightness",
+  "url": "https://github.com/Wiertless/silverpanda"
+}

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.silverpanda-auto-brightness"
+          path="/org/gnome/shell/extensions/silverpanda-auto-brightness/">
+    <key name="dark-level" type="d">
+      <range min="0.0" max="1.0"/>
+      <default>0.15</default>
+      <summary>Brightness in the dark</summary>
+      <description>Screen brightness (0–1) at 0 lux, before the brightness slider's adjustment.</description>
+    </key>
+    <key name="bright-lux" type="i">
+      <range min="50" max="50000"/>
+      <default>5000</default>
+      <summary>Full brightness from</summary>
+      <description>Light level in lux at which the screen reaches full brightness.</description>
+    </key>
+    <key name="curve" type="d">
+      <range min="0.3" max="3.0"/>
+      <default>1.0</default>
+      <summary>Curve</summary>
+      <description>Below 1 the screen brightens quickly in dim light; above 1 it stays dim longer and rises late.</description>
+    </key>
+    <key name="response" type="d">
+      <range min="0.2" max="10.0"/>
+      <default>1.5</default>
+      <summary>Speed</summary>
+      <description>Seconds to follow a brighter room; a darker room takes three times as long, so a passing hand doesn't dim the screen.</description>
+    </key>
+  </schema>
+</schemalist>
