@@ -1,0 +1,101 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: silverpanda-auto-brightness\n"
+"Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "Auto Brightness"
+msgstr "Automatyczna jasność"
+
+msgid "Follows the light in the room"
+msgstr "Dopasowuje się do światła w pokoju"
+
+msgid "Keyboard Backlight"
+msgstr "Podświetlenie klawiatury"
+
+msgid "Settings"
+msgstr "Ustawienia"
+
+msgid "dark"
+msgstr "ciemno"
+
+msgid "dim, like a lamp across the room"
+msgstr "przyciemnione, jak lampka w drugim końcu pokoju"
+
+msgid "a lit room"
+msgstr "oświetlony pokój"
+
+msgid "bright, like a lamp right by the laptop"
+msgstr "jasno, jak lampka tuż przy laptopie"
+
+msgid "daylight"
+msgstr "światło dzienne"
+
+msgid "direct light"
+msgstr "bezpośrednie światło"
+
+msgid "Back to the defaults"
+msgstr "Przywróć domyślne"
+
+msgid "keyboard off"
+msgstr "klawiatura wył."
+
+msgid "The screen follows the light in the room. The brightness slider still works: below the middle the screen is darker than the curve, above it brighter."
+msgstr "Ekran dopasowuje się do światła w pokoju. Suwak jasności nadal działa: poniżej środka ekran jest ciemniejszy od krzywej, powyżej jaśniejszy."
+
+msgid "Automatic Screen Brightness"
+msgstr "Automatyczna jasność ekranu"
+
+msgid "The same switch as in Quick Settings and in Settings → Power"
+msgstr "Ten sam przełącznik co w Szybkich ustawieniach i w Ustawieniach → Zasilanie"
+
+msgid "Brightness Curve"
+msgstr "Krzywa jasności"
+
+msgid "Drag the points to set the brightness for each light level. The dot is the room now."
+msgstr "Przeciągnij punkty, by ustawić jasność dla każdego poziomu światła. Kropka to pokój w tej chwili."
+
+msgid "Light in the room"
+msgstr "Światło w pokoju"
+
+msgid "Waiting for the sensor…"
+msgstr "Czekam na czujnik…"
+
+msgid "Reaction time"
+msgstr "Czas reakcji"
+
+msgid "Seconds to catch up with a brighter room; dimming takes three times longer"
+msgstr "Sekundy na dogonienie jaśniejszego pokoju; ściemnianie trwa trzy razy dłużej"
+
+msgid "On in the dark, off above the dashed line. Changing the keyboard brightness while it's lit sets its level."
+msgstr "Włączone w ciemności, wyłączone powyżej przerywanej linii. Zmiana jasności klawiatury, gdy świeci, ustawia jej poziom."
+
+msgid "Follows the room"
+msgstr "Dopasowuje się do pokoju"
+
+msgid "Also in the Auto Brightness menu in Quick Settings"
+msgstr "Także w menu Automatycznej jasności w Szybkich ustawieniach"
+
+msgid "Turns off above"
+msgstr "Wyłącza się powyżej"
+
+msgid "Brightness in the dark"
+msgstr "Jasność w ciemności"
+
+msgid "Percent"
+msgstr "W procentach"
+
+msgid "Lux; back on below {on}"
+msgstr "W luksach; włącza się ponownie poniżej {on}"
+
+msgid "{lux} lux: {what}"
+msgstr "{lux} lx: {what}"
+
+msgid "screen {percent}%"
+msgstr "ekran {percent}%"
+
+msgid "No light sensor found"
+msgstr "Nie znaleziono czujnika światła"

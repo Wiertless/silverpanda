@@ -106,6 +106,8 @@ modules:
       - firewalld-default-zone.sh
       # Pinned release of github.com/Wiertless/panda-assistant
       - panda-assistant.sh
+      # Automatic Screen Brightness that follows the room (GNOME Shell extension)
+      - auto-brightness.sh
       # Pinned release of Lemonade Server, which Assistant uses when present
       - lemonade.sh
 
