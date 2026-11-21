@@ -26,11 +26,12 @@ function spinRow(settings, key, title, subtitle, {min, max, step, digits, scale 
         title, subtitle, digits,
         adjustment: new Gtk.Adjustment({lower: min, upper: max, step_increment: step, page_increment: step * 10}),
     });
-    const get = () => (key === 'bright-lux' ? settings.get_int(key) : settings.get_double(key)) * scale;
+    const isInt = settings.settings_schema.get_key(key).get_value_type().dup_string() === 'i';
+    const get = () => (isInt ? settings.get_int(key) : settings.get_double(key)) * scale;
     row.value = get();
     row.connect('notify::value', () => {
         const v = row.value / scale;
-        if (key === 'bright-lux')
+        if (isInt)
             settings.set_int(key, Math.round(v));
         else
             settings.set_double(key, v);
@@ -81,6 +82,25 @@ export default class AutoBrightnessPrefs extends ExtensionPreferences {
         reset.connect('clicked', () => KEYS.forEach(k => settings.reset(k)));
         curve.set_header_suffix(reset);
         page.add(curve);
+
+        const keyboard = new Adw.PreferencesGroup({
+            title: _('Keyboard Backlight'),
+            description: _('On in the dark, off in bright light. Changing the keyboard brightness while it\'s on sets the level.'),
+        });
+        const kbdToggle = new Adw.SwitchRow({title: _('Follows the room')});
+        settings.bind('keyboard', kbdToggle, 'active', Gio.SettingsBindFlags.DEFAULT);
+        keyboard.add(kbdToggle);
+        const kbdRows = [
+            spinRow(settings, 'keyboard-level', _('Level in the dark'), _('Percent'),
+                {min: 1, max: 100, step: 5, digits: 0}),
+            spinRow(settings, 'keyboard-off-lux', _('Off above'),
+                _('Lux; back on below 70% of it'), {min: 1, max: 2000, step: 10, digits: 0}),
+        ];
+        for (const row of kbdRows) {
+            settings.bind('keyboard', row, 'sensitive', Gio.SettingsBindFlags.GET);
+            keyboard.add(row);
+        }
+        page.add(keyboard);
 
         const update = () => {
             if (lux !== null) {

@@ -14,6 +14,8 @@ import {readCurve, target} from './curve.js';
 
 const POWER_SCHEMA = 'org.gnome.settings-daemon.plugins.power';
 const TICK_MS = 50;
+// The keyboard comes back on below this share of keyboard-off-lux (no flicker at the edge).
+const KEYBOARD_ON_SHARE = 0.7;
 
 const SensorProxy = Gio.DBusProxy.makeProxyWrapper(`
 <node>
@@ -22,6 +24,18 @@ const SensorProxy = Gio.DBusProxy.makeProxyWrapper(`
     <method name="ReleaseLight"/>
     <property name="HasAmbientLight" type="b" access="read"/>
     <property name="LightLevel" type="d" access="read"/>
+  </interface>
+</node>`);
+
+// gsd-power's keyboard backlight, as the Quick Settings slider uses it.
+const KeyboardProxy = Gio.DBusProxy.makeProxyWrapper(`
+<node>
+  <interface name="org.gnome.SettingsDaemon.Power.Keyboard">
+    <property name="Brightness" type="i" access="readwrite"/>
+    <signal name="BrightnessChanged">
+      <arg type="i" name="brightness"/>
+      <arg type="s" name="source"/>
+    </signal>
   </interface>
 </node>`);
 
@@ -73,6 +87,16 @@ export default class AutoBrightness extends Extension {
                     }, this);
                 this._read();
             }, this._cancel, Gio.DBusProxyFlags.NONE);
+        this._kbdDark = null; // unknown until the first reading
+        this._kbdSet = null; // what this extension last set
+        new KeyboardProxy(Gio.DBus.session, 'org.gnome.SettingsDaemon.Power',
+            '/org/gnome/SettingsDaemon/Power', (proxy, error) => {
+                if (error)
+                    return; // no keyboard backlight control
+                this._keyboard = proxy;
+                proxy.connectSignal('BrightnessChanged', (_p, _s, [level]) => this._keyboardChanged(level));
+                this._update();
+            }, this._cancel, Gio.DBusProxyFlags.NONE);
         this._update();
     }
 
@@ -86,6 +110,7 @@ export default class AutoBrightness extends Extension {
                 this._proxy.ReleaseLightRemote(() => {});
             this._proxy.disconnectObject(this);
         }
+        this._keyboard = null;
         this._power.disconnectObject(this);
         this._settings.disconnectObject(this);
         delete this._manager.autoBrightnessTarget;
@@ -94,14 +119,21 @@ export default class AutoBrightness extends Extension {
         this._settings = this._power = null;
     }
 
-    _on() {
-        return this._power.get_boolean('ambient-enabled') &&
-            this._proxy?.g_name_owner && this._proxy.HasAmbientLight;
+    _sensor() {
+        return Boolean(this._proxy?.g_name_owner && this._proxy.HasAmbientLight);
     }
 
-    // Hold the light sensor only while automatic brightness is on.
+    _on() {
+        return this._power.get_boolean('ambient-enabled') && this._sensor();
+    }
+
+    _keyboardOn() {
+        return Boolean(this._keyboard) && this._settings.get_boolean('keyboard') && this._sensor();
+    }
+
+    // Hold the light sensor only while the screen or the keyboard follows the room.
     _claim() {
-        const want = Boolean(this._on());
+        const want = this._sensor() && (this._on() || this._keyboardOn());
         if (!this._proxy || want === this._claimed)
             return;
         this._claimed = want;
@@ -121,6 +153,7 @@ export default class AutoBrightness extends Extension {
         if (!this._manager)
             return;
         this._claim();
+        this._updateKeyboard();
         if (!this._on() || this._lux === null) {
             // Off: whatever gsd-power says (-1, "no auto brightness", when it's off too).
             this._stop();
@@ -150,6 +183,33 @@ export default class AutoBrightness extends Extension {
         if (done)
             this._tick = 0;
         return done ? GLib.SOURCE_REMOVE : GLib.SOURCE_CONTINUE;
+    }
+
+    // On in the dark, off in bright light; set only when that flips (or a setting
+    // changes), so the Fn key and gsd-power's idle dimming are left alone in between.
+    _updateKeyboard() {
+        if (!this._keyboardOn() || this._lux === null) {
+            this._kbdDark = null;
+            return;
+        }
+        const off = this._settings.get_int('keyboard-off-lux');
+        const dark = this._kbdDark === null
+            ? this._lux < off
+            : this._kbdDark ? this._lux < off : this._lux < off * KEYBOARD_ON_SHARE;
+        const level = dark ? this._settings.get_int('keyboard-level') : 0;
+        if (dark === this._kbdDark && level === this._kbdSet)
+            return;
+        this._kbdDark = dark;
+        this._kbdSet = level;
+        this._keyboard.Brightness = level;
+    }
+
+    // The user changed the keyboard brightness while it's on in the dark: that's the new level.
+    _keyboardChanged(level) {
+        if (this._kbdDark && level > 0 && level !== this._kbdSet) {
+            this._kbdSet = level;
+            this._settings.set_int('keyboard-level', level);
+        }
     }
 
     _stop() {

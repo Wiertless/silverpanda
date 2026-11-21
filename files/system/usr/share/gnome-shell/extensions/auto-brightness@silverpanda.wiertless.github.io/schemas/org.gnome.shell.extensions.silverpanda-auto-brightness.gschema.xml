@@ -26,5 +26,22 @@
       <summary>Speed</summary>
       <description>Seconds to follow a brighter room; a darker room takes three times as long, so a passing hand doesn't dim the screen.</description>
     </key>
+    <key name="keyboard" type="b">
+      <default>true</default>
+      <summary>Keyboard backlight follows the room</summary>
+      <description>Turn the keyboard backlight on in the dark and off in bright light.</description>
+    </key>
+    <key name="keyboard-level" type="i">
+      <range min="1" max="100"/>
+      <default>30</default>
+      <summary>Keyboard level in the dark</summary>
+      <description>Keyboard backlight percent when the room is dark. Changing the keyboard brightness while it's on sets this.</description>
+    </key>
+    <key name="keyboard-off-lux" type="i">
+      <range min="1" max="2000"/>
+      <default>80</default>
+      <summary>Keyboard off above</summary>
+      <description>Light level in lux above which the keyboard backlight goes off; it comes back on below 70% of it.</description>
+    </key>
   </schema>
 </schemalist>
