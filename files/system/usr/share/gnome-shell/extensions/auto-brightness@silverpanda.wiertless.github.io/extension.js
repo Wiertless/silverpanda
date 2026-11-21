@@ -87,24 +87,33 @@ export default class AutoBrightness extends Extension {
             return;
         }
         this._manager = manager;
-        this._applyTarget = v => setter.call(manager, v);
-        // The slider moved (brightness keys too): its bias changes with it.
-        manager.connectObject('user-update', () => {
-            if (this._current !== null)
-                this._applyTarget(this._shellTarget(this._current));
-        }, this);
-        // What gsd-power sends over D-Bus is kept (and put back on disable), not applied.
+        this._restoreTarget = v => setter.call(manager, v);
+        this._current = null; // this extension's automatic level, null while it's off
+        // What gsd-power sends over D-Bus is kept (applied only while this is off, and put
+        // back on disable).
         this._gsdTarget = manager.autoBrightnessTarget;
+        // The shell reads _abTarget as it works out each backlight value from the slider.
+        // Answering right then, for the slider as it is, makes one backlight write per
+        // slider step; correcting afterwards made two different ones (flicker).
+        Object.defineProperty(manager, '_abTarget', {
+            configurable: true,
+            get: () => this._current === null
+                ? this._gsdTarget ?? -1
+                : this._shellTarget(this._current),
+            set: () => {},
+        });
         Object.defineProperty(manager, 'autoBrightnessTarget', {
             configurable: true,
             get: () => manager._abTarget,
             set: v => {
                 this._gsdTarget = v;
+                if (this._current === null)
+                    manager._sync();
             },
         });
+        this._applyTarget = () => manager._sync();
 
         this._lux = null;
-        this._current = null;
         this._goal = null;
         this._claimed = false;
         this._settings = this.getSettings();
@@ -155,7 +164,6 @@ export default class AutoBrightness extends Extension {
         this._toggle.destroy();
         this._indicator.destroy();
         this._toggle = this._indicator = null;
-        this._manager.disconnectObject(this);
         this._stop();
         this._cancel.cancel();
         if (this._proxy) {
@@ -167,8 +175,9 @@ export default class AutoBrightness extends Extension {
         this._power.disconnectObject(this);
         this._settings.disconnectObject(this);
         delete this._manager.autoBrightnessTarget;
-        this._applyTarget(this._gsdTarget ?? -1);
-        this._manager = this._applyTarget = this._proxy = this._cancel = null;
+        delete this._manager._abTarget;
+        this._restoreTarget(this._gsdTarget ?? -1);
+        this._manager = this._applyTarget = this._restoreTarget = this._proxy = this._cancel = null;
         this._settings = this._power = null;
     }
 
@@ -223,13 +232,13 @@ export default class AutoBrightness extends Extension {
             // Off: whatever gsd-power says (-1, "no auto brightness", when it's off too).
             this._stop();
             this._current = null;
-            this._applyTarget(this._gsdTarget ?? -1);
+            this._applyTarget();
             return;
         }
         this._goal = target(this._lux, readCurve(this._settings));
         if (this._current === null) {
             this._current = this._goal;
-            this._applyTarget(this._shellTarget(this._current));
+            this._applyTarget();
         } else if (!this._tick) {
             this._tick = GLib.timeout_add(GLib.PRIORITY_DEFAULT, TICK_MS, () => this._step());
         }
@@ -261,7 +270,7 @@ export default class AutoBrightness extends Extension {
         const done = Math.abs(this._goal - this._current) < 0.002;
         if (done)
             this._current = this._goal;
-        this._applyTarget(this._shellTarget(this._current));
+        this._applyTarget();
         if (done)
             this._tick = 0;
         return done ? GLib.SOURCE_REMOVE : GLib.SOURCE_CONTINUE;
