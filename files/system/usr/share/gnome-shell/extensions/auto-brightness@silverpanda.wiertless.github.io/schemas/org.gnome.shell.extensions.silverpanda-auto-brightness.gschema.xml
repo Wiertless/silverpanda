@@ -10,7 +10,7 @@
     </key>
     <key name="bright-lux" type="i">
       <range min="50" max="50000"/>
-      <default>5000</default>
+      <default>3000</default>
       <summary>Full brightness from</summary>
       <description>Light level in lux at which the screen reaches full brightness.</description>
     </key>

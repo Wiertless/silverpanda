@@ -72,7 +72,7 @@ export default class AutoBrightnessPrefs extends ExtensionPreferences {
         curve.add(spinRow(settings, 'dark-level', _('Brightness in the dark'),
             _('Percent, at 0 lux'), {min: 0, max: 100, step: 5, digits: 0, scale: 100}));
         curve.add(spinRow(settings, 'bright-lux', _('Full brightness from'),
-            _('Lux. A lit room is 100–500, daylight by a window 1000–10000'), {min: 50, max: 50000, step: 100, digits: 0}));
+            _('Lux. A lit room is 50–500; this sensor reads at most about 3300'), {min: 50, max: 50000, step: 100, digits: 0}));
         curve.add(spinRow(settings, 'curve', _('Curve'),
             _('Below 1: brighter in dim light. Above 1: stays dim longer'), {min: 0.3, max: 3, step: 0.1, digits: 1}));
         curve.add(spinRow(settings, 'response', _('Speed'),
