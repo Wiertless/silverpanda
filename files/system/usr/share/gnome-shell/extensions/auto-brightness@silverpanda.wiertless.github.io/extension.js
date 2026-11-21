@@ -8,7 +8,10 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import GObject from 'gi://GObject';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import {QuickMenuToggle, SystemIndicator} from 'resource:///org/gnome/shell/ui/quickSettings.js';
+import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {readCurve, target} from './curve.js';
 
@@ -16,6 +19,10 @@ const POWER_SCHEMA = 'org.gnome.settings-daemon.plugins.power';
 const TICK_MS = 50;
 // The keyboard comes back on below this share of keyboard-off-lux (no flicker at the edge).
 const KEYBOARD_ON_SHARE = 0.7;
+// gsd-power's names for keyboard changes the user made: over D-Bus (the Quick
+// Settings slider and toggle, the Settings app) and with the Fn key. Others
+// (gsd-power restoring or dimming it) don't count as the user's choice.
+const USER_SOURCES = ['set property', 'external'];
 
 const SensorProxy = Gio.DBusProxy.makeProxyWrapper(`
 <node>
@@ -38,6 +45,31 @@ const KeyboardProxy = Gio.DBusProxy.makeProxyWrapper(`
     </signal>
   </interface>
 </node>`);
+
+// In Quick Settings: GNOME's own Automatic Screen Brightness switch, with the
+// keyboard backlight and the settings in its menu.
+const AutoBrightnessToggle = GObject.registerClass(
+class AutoBrightnessToggle extends QuickMenuToggle {
+    constructor(ext) {
+        super({
+            title: _('Auto Brightness'),
+            iconName: 'display-brightness-symbolic',
+            toggleMode: true,
+        });
+        ext._power.bind('ambient-enabled', this, 'checked', Gio.SettingsBindFlags.DEFAULT);
+        this.menu.setHeader('display-brightness-symbolic', _('Auto Brightness'),
+            _('Follows the light in the room'));
+        const keyboard = new PopupMenu.PopupSwitchMenuItem(_('Keyboard Backlight'),
+            ext._settings.get_boolean('keyboard'));
+        keyboard.connect('toggled', (_item, state) => ext._settings.set_boolean('keyboard', state));
+        ext._settings.connectObject('changed::keyboard',
+            () => keyboard.setToggleState(ext._settings.get_boolean('keyboard')), this);
+        this.menu.addMenuItem(keyboard);
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this.menu.addAction(_('Settings'), () => ext.openPreferences());
+        this.connect('destroy', () => Gio.Settings.unbind(this, 'checked'));
+    }
+});
 
 export default class AutoBrightness extends Extension {
     enable() {
@@ -94,15 +126,24 @@ export default class AutoBrightness extends Extension {
                 if (error)
                     return; // no keyboard backlight control
                 this._keyboard = proxy;
-                proxy.connectSignal('BrightnessChanged', (_p, _s, [level]) => this._keyboardChanged(level));
+                proxy.connectSignal('BrightnessChanged',
+                    (_p, _s, [level, source]) => this._keyboardChanged(level, source));
                 this._update();
             }, this._cancel, Gio.DBusProxyFlags.NONE);
+
+        this._indicator = new SystemIndicator();
+        this._toggle = new AutoBrightnessToggle(this);
+        this._indicator.quickSettingsItems.push(this._toggle);
+        Main.panel.statusArea.quickSettings.addExternalIndicator(this._indicator);
         this._update();
     }
 
     disable() {
         if (!this._manager)
             return;
+        this._toggle.destroy();
+        this._indicator.destroy();
+        this._toggle = this._indicator = null;
         this._stop();
         this._cancel.cancel();
         if (this._proxy) {
@@ -153,6 +194,7 @@ export default class AutoBrightness extends Extension {
         if (!this._manager)
             return;
         this._claim();
+        this._toggle?.set({visible: this._sensor()});
         this._updateKeyboard();
         if (!this._on() || this._lux === null) {
             // Off: whatever gsd-power says (-1, "no auto brightness", when it's off too).
@@ -204,11 +246,18 @@ export default class AutoBrightness extends Extension {
         this._keyboard.Brightness = level;
     }
 
-    // The user changed the keyboard brightness while it's on in the dark: that's the new level.
-    _keyboardChanged(level) {
-        if (this._kbdDark && level > 0 && level !== this._kbdSet) {
+    _keyboardChanged(level, source) {
+        if (this._kbdDark === null || level === this._kbdSet)
+            return;
+        if (USER_SOURCES.includes(source)) {
+            // The user's choice: left alone until the room flips; in the dark it's the new level.
             this._kbdSet = level;
-            this._settings.set_int('keyboard-level', level);
+            if (this._kbdDark && level > 0)
+                this._settings.set_int('keyboard-level', level);
+        } else if (level > 0) {
+            // gsd-power put back its own level (at login, after idle): ours again.
+            // (It turning the light off on idle is left alone.)
+            this._keyboard.Brightness = this._kbdSet;
         }
     }
 
