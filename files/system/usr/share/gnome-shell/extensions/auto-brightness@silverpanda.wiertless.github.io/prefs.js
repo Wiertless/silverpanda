@@ -1,15 +1,22 @@
-// Settings: the brightness curve, drawn, with the room's light level live on it.
+// Settings: the brightness curve as points to drag (like an equalizer), with
+// the room's light level live on it.
 
 import Adw from 'gi://Adw';
+import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import Gtk from 'gi://Gtk';
+import PangoCairo from 'gi://PangoCairo';
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-import {readCurve, target} from './curve.js';
+import {BANDS, keepRising, position, readCurve, target} from './curve.js';
 
 const POWER_SCHEMA = 'org.gnome.settings-daemon.plugins.power';
-const MAX_LUX = 50000; // the graph's right edge
-const KEYS = ['dark-level', 'bright-lux', 'curve', 'response'];
+const GRAPH_MAX_LUX = 10000; // the graph's right edge
+const KEYBOARD_KEYS = ['keyboard-level', 'keyboard-off-lux'];
+const KEYBOARD_ON_SHARE = 0.7; // as in extension.js
+const POINT_RADIUS = 7;
+const GRAB_DISTANCE = 22; // px from a point that still picks it up
+const WRITE_EVERY_MS = 80; // while dragging, so the real screen follows
 
 const SensorProxy = Gio.DBusProxy.makeProxyWrapper(`
 <node>
@@ -21,20 +28,34 @@ const SensorProxy = Gio.DBusProxy.makeProxyWrapper(`
   </interface>
 </node>`);
 
-function spinRow(settings, key, title, subtitle, {min, max, step, digits, scale = 1}) {
+/** What a light level is like, in words. */
+function describeLux(lux) {
+    if (lux < 5)
+        return _('dark');
+    if (lux < 50)
+        return _('dim, like a lamp across the room');
+    if (lux < 300)
+        return _('a lit room');
+    if (lux < 1000)
+        return _('bright, like a lamp right by the laptop');
+    if (lux < 3000)
+        return _('daylight');
+    return _('direct light');
+}
+
+function spinRow(settings, key, title, subtitle, {min, max, step, digits}) {
     const row = new Adw.SpinRow({
         title, subtitle, digits,
         adjustment: new Gtk.Adjustment({lower: min, upper: max, step_increment: step, page_increment: step * 10}),
     });
     const isInt = settings.settings_schema.get_key(key).get_value_type().dup_string() === 'i';
-    const get = () => (isInt ? settings.get_int(key) : settings.get_double(key)) * scale;
+    const get = () => isInt ? settings.get_int(key) : settings.get_double(key);
     row.value = get();
     row.connect('notify::value', () => {
-        const v = row.value / scale;
         if (isInt)
-            settings.set_int(key, Math.round(v));
+            settings.set_int(key, Math.round(row.value));
         else
-            settings.set_double(key, v);
+            settings.set_double(key, row.value);
     });
     settings.connect(`changed::${key}`, () => {
         if (Math.abs(row.value - get()) > 1e-6)
@@ -43,58 +64,268 @@ function spinRow(settings, key, title, subtitle, {min, max, step, digits, scale 
     return row;
 }
 
+function resetButton(onClick) {
+    const button = new Gtk.Button({
+        icon_name: 'edit-undo-symbolic',
+        tooltip_text: _('Back to the defaults'),
+        valign: Gtk.Align.CENTER,
+        css_classes: ['flat'],
+    });
+    button.connect('clicked', onClick);
+    return button;
+}
+
+/** The curve to drag: points at fixed light levels, the room now as a dot. */
+function curveEditor(settings, getLux) {
+    const area = new Gtk.DrawingArea({content_height: 260, margin_top: 8, margin_bottom: 4, hexpand: true});
+    let points = readCurve(settings);
+    let dragging = -1, hover = -1, lastWrite = 0, startY = 0;
+    const box = {left: 46, right: 18, top: 26, bottom: 30};
+
+    const geometry = () => {
+        const w = area.get_width(), h = area.get_height();
+        const x = l => box.left + (w - box.left - box.right) * position(Math.min(l, GRAPH_MAX_LUX)) /
+            position(GRAPH_MAX_LUX);
+        const y = b => h - box.bottom - (h - box.top - box.bottom) * b;
+        const valueAt = py => Math.min(1, Math.max(0, (h - box.bottom - py) / (h - box.top - box.bottom)));
+        return {w, h, x, y, valueAt};
+    };
+    const nearest = (px, py) => {
+        const {x, y} = geometry();
+        let best = -1, bestD = GRAB_DISTANCE;
+        BANDS.forEach((l, i) => {
+            const d = Math.hypot(px - x(l), py - y(points[i]));
+            if (d < bestD) {
+                best = i;
+                bestD = d;
+            }
+        });
+        // Anywhere in a point's column picks it up too, like an equalizer slider.
+        if (best < 0) {
+            BANDS.forEach((l, i) => {
+                if (Math.abs(px - x(l)) < GRAB_DISTANCE / 2)
+                    best = i;
+            });
+        }
+        return best;
+    };
+    const write = () => {
+        settings.set_value('points', new GLib.Variant('ad', points));
+        lastWrite = GLib.get_monotonic_time() / 1000;
+    };
+
+    const drag = new Gtk.GestureDrag();
+    drag.connect('drag-begin', (_g, px, py) => {
+        dragging = nearest(px, py);
+        startY = py;
+        if (dragging >= 0) {
+            points = keepRising(points.with(dragging, geometry().valueAt(py)), dragging);
+            area.set_cursor_from_name('grabbing');
+            area.queue_draw();
+        }
+    });
+    drag.connect('drag-update', (_g, _dx, dy) => {
+        if (dragging < 0)
+            return;
+        points = keepRising(points.with(dragging, geometry().valueAt(startY + dy)), dragging);
+        area.queue_draw();
+        if (GLib.get_monotonic_time() / 1000 - lastWrite > WRITE_EVERY_MS)
+            write();
+    });
+    drag.connect('drag-end', () => {
+        if (dragging >= 0)
+            write();
+        dragging = -1;
+        area.set_cursor_from_name(hover >= 0 ? 'grab' : null);
+        area.queue_draw();
+    });
+    area.add_controller(drag);
+
+    const motion = new Gtk.EventControllerMotion();
+    motion.connect('motion', (_m, px, py) => {
+        const h = nearest(px, py);
+        if (h !== hover && dragging < 0) {
+            hover = h;
+            area.set_cursor_from_name(h >= 0 ? 'grab' : null);
+            area.queue_draw();
+        }
+    });
+    motion.connect('leave', () => {
+        hover = -1;
+        area.queue_draw();
+    });
+    area.add_controller(motion);
+
+    settings.connect('changed::points', () => {
+        if (dragging < 0)
+            points = readCurve(settings);
+        area.queue_draw();
+    });
+    settings.connect('changed::keyboard', () => area.queue_draw());
+    settings.connect('changed::keyboard-off-lux', () => area.queue_draw());
+
+    area.set_draw_func((_a, cr) => {
+        const {w, h, x, y} = geometry();
+        const fg = area.get_color();
+        const accent = Adw.StyleManager.get_default().get_accent_color_rgba();
+        const ink = a => cr.setSourceRGBA(fg.red, fg.green, fg.blue, a);
+        const text = (s, tx, ty, align = 0.5) => {
+            const layout = PangoCairo.create_layout(cr);
+            layout.set_text(s, -1);
+            const [, logical] = layout.get_pixel_extents();
+            cr.moveTo(tx - logical.width * align, ty - logical.height / 2);
+            PangoCairo.show_layout(cr, layout);
+        };
+
+        // Grid and labels.
+        cr.setLineWidth(1);
+        ink(0.1);
+        for (const l of [1, 10, 100, 1000, 10000]) {
+            cr.moveTo(x(l), box.top);
+            cr.lineTo(x(l), h - box.bottom);
+        }
+        for (const b of [0, 0.25, 0.5, 0.75, 1]) {
+            cr.moveTo(box.left, y(b));
+            cr.lineTo(w - box.right, y(b));
+        }
+        cr.stroke();
+        ink(0.55);
+        for (const [l, label] of [[0, '0'], [10, '10'], [100, '100'], [1000, '1000'], [10000, '10 000 lx']])
+            text(label, x(l), h - box.bottom / 2, l === 10000 ? 0.85 : 0.5);
+        for (const b of [0, 0.5, 1])
+            text(`${b * 100}%`, box.left - 8, y(b), 1);
+
+        // Where the keyboard turns off.
+        if (settings.get_boolean('keyboard')) {
+            const kx = x(settings.get_int('keyboard-off-lux'));
+            ink(0.3);
+            cr.setDash([4, 4], 0);
+            cr.moveTo(kx, box.top);
+            cr.lineTo(kx, h - box.bottom);
+            cr.stroke();
+            cr.setDash([], 0);
+            ink(0.55);
+            text(_('keyboard off'), kx, box.top - 14);
+        }
+
+        // The curve, under it a light fill.
+        const steps = 240;
+        const at = i => 10 ** (position(GRAPH_MAX_LUX) * i / steps) - 1;
+        cr.moveTo(x(0), y(0));
+        for (let i = 0; i <= steps; i++)
+            cr.lineTo(x(at(i)), y(target(at(i), points)));
+        cr.lineTo(x(GRAPH_MAX_LUX), y(0));
+        cr.closePath();
+        cr.setSourceRGBA(accent.red, accent.green, accent.blue, 0.12);
+        cr.fill();
+        for (let i = 0; i <= steps; i++) {
+            const px = x(at(i)), py = y(target(at(i), points));
+            if (i === 0)
+                cr.moveTo(px, py);
+            else
+                cr.lineTo(px, py);
+        }
+        cr.setSourceRGBA(accent.red, accent.green, accent.blue, 1);
+        cr.setLineWidth(2.5);
+        cr.stroke();
+
+        // The points to drag; the one in hand shows its value.
+        BANDS.forEach((l, i) => {
+            const active = i === dragging || (dragging < 0 && i === hover);
+            cr.arc(x(l), y(points[i]), active ? POINT_RADIUS + 2 : POINT_RADIUS, 0, 2 * Math.PI);
+            cr.setSourceRGBA(accent.red, accent.green, accent.blue, 1);
+            cr.fillPreserve();
+            cr.setSourceRGBA(1, 1, 1, 0.9);
+            cr.setLineWidth(2);
+            cr.stroke();
+            if (active) {
+                ink(0.9);
+                text(`${Math.round(points[i] * 100)}% · ${l} lx`, x(l), y(points[i]) - 18,
+                    i === 0 ? 0.15 : i === BANDS.length - 1 ? 0.85 : 0.5);
+            }
+        });
+
+        // The room now.
+        const lux = getLux();
+        if (lux !== null) {
+            const px = x(lux), py = y(target(lux, points));
+            ink(0.25);
+            cr.setLineWidth(1);
+            cr.moveTo(px, py);
+            cr.lineTo(px, h - box.bottom);
+            cr.stroke();
+            ink(0.95);
+            cr.arc(px, py, 5, 0, 2 * Math.PI);
+            cr.fill();
+        }
+        cr.$dispose();
+    });
+    return area;
+}
+
 export default class AutoBrightnessPrefs extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
         const power = new Gio.Settings({schema_id: POWER_SCHEMA});
         let lux = null;
+        window.set_default_size(660, 900);
 
         const page = new Adw.PreferencesPage();
         window.add(page);
 
-        // On/off is GNOME's own switch, so it's the same one Settings shows.
-        const state = new Adw.PreferencesGroup();
+        // On/off is GNOME's own switch, so it's the same one Settings and Quick Settings show.
+        const intro = new Adw.PreferencesGroup({
+            description: _('The screen follows the light in the room along the curve below. ' +
+                'The brightness slider and keys still work: in the middle the screen follows the curve exactly, ' +
+                'lower makes it darker than the curve, higher brighter, and it keeps following the room either way.'),
+        });
         const toggle = new Adw.SwitchRow({
             title: _('Automatic Screen Brightness'),
-            subtitle: _('The same switch as in Settings → Power. The brightness slider still makes it brighter or darker than automatic.'),
+            subtitle: _('The same switch as in Quick Settings and in Settings → Power'),
         });
         power.bind('ambient-enabled', toggle, 'active', Gio.SettingsBindFlags.DEFAULT);
-        state.add(toggle);
-        page.add(state);
+        intro.add(toggle);
+        page.add(intro);
 
-        const now = new Adw.PreferencesGroup({title: _('Now')});
-        const graph = new Gtk.DrawingArea({content_height: 160, margin_top: 6, margin_bottom: 6});
-        const reading = new Adw.ActionRow({title: _('Light'), subtitle: _('Waiting for the sensor…')});
-        now.add(graph);
-        now.add(reading);
-        page.add(now);
-
-        const curve = new Adw.PreferencesGroup({title: _('Curve')});
-        curve.add(spinRow(settings, 'dark-level', _('Brightness in the dark'),
-            _('Percent, at 0 lux'), {min: 0, max: 100, step: 5, digits: 0, scale: 100}));
-        curve.add(spinRow(settings, 'bright-lux', _('Full brightness from'),
-            _('Lux. A lit room is 50–500; this sensor reads at most about 3300'), {min: 50, max: 50000, step: 100, digits: 0}));
-        curve.add(spinRow(settings, 'curve', _('Curve'),
-            _('Below 1: brighter in dim light. Above 1: stays dim longer'), {min: 0.3, max: 3, step: 0.1, digits: 1}));
-        curve.add(spinRow(settings, 'response', _('Speed'),
-            _('Seconds to follow a brighter room; dimming takes three times as long'), {min: 0.2, max: 10, step: 0.1, digits: 1}));
-        const reset = new Gtk.Button({label: _('Reset'), valign: Gtk.Align.CENTER});
-        reset.connect('clicked', () => KEYS.forEach(k => settings.reset(k)));
-        curve.set_header_suffix(reset);
+        const curve = new Adw.PreferencesGroup({
+            title: _('Brightness Curve'),
+            description: _('Drag a point up or down to set how bright the screen is at that light level; ' +
+                'the screen follows as you drag. The line between points always rises. ' +
+                'The dot is the light in the room now.'),
+        });
+        curve.set_header_suffix(resetButton(() => settings.reset('points')));
+        const editor = curveEditor(settings, () => lux);
+        curve.add(new Gtk.Frame({child: editor, css_classes: ['card']}));
+        const room = new Adw.ActionRow({title: _('Light in the room'), subtitle: _('Waiting for the sensor…')});
+        const roomValue = new Gtk.Label({css_classes: ['numeric', 'dim-label']});
+        room.add_suffix(roomValue);
+        curve.add(room);
+        const response = spinRow(settings, 'response', _('Reaction time'),
+            _('Seconds the screen takes to catch up with a brighter room. ' +
+                'It dims three times slower, so a passing shadow doesn\'t darken it.'),
+            {min: 0.2, max: 10, step: 0.1, digits: 1});
+        curve.add(response);
         page.add(curve);
 
         const keyboard = new Adw.PreferencesGroup({
             title: _('Keyboard Backlight'),
-            description: _('On in the dark, off in bright light. Changing the keyboard brightness while it\'s on sets the level.'),
+            description: _('Lights the keyboard in the dark and turns it off in bright light (the dashed line on the curve). ' +
+                'If you change the keyboard brightness while it\'s lit (Fn key or Quick Settings), ' +
+                'that becomes its level in the dark.'),
         });
-        const kbdToggle = new Adw.SwitchRow({title: _('Follows the room')});
+        keyboard.set_header_suffix(resetButton(() => KEYBOARD_KEYS.forEach(k => settings.reset(k))));
+        const kbdToggle = new Adw.SwitchRow({
+            title: _('Follows the room'),
+            subtitle: _('Also in the Auto Brightness menu in Quick Settings'),
+        });
         settings.bind('keyboard', kbdToggle, 'active', Gio.SettingsBindFlags.DEFAULT);
         keyboard.add(kbdToggle);
+        const kbdOff = spinRow(settings, 'keyboard-off-lux', _('Turns off above'),
+            '', {min: 1, max: 2000, step: 5, digits: 0});
         const kbdRows = [
-            spinRow(settings, 'keyboard-level', _('Level in the dark'), _('Percent'),
-                {min: 1, max: 100, step: 5, digits: 0}),
-            spinRow(settings, 'keyboard-off-lux', _('Off above'),
-                _('Lux; back on below 70% of it'), {min: 1, max: 2000, step: 10, digits: 0}),
+            spinRow(settings, 'keyboard-level', _('Brightness in the dark'),
+                _('Percent'), {min: 1, max: 100, step: 5, digits: 0}),
+            kbdOff,
         ];
         for (const row of kbdRows) {
             settings.bind('keyboard', row, 'sensitive', Gio.SettingsBindFlags.GET);
@@ -103,52 +334,25 @@ export default class AutoBrightnessPrefs extends ExtensionPreferences {
         page.add(keyboard);
 
         const update = () => {
+            const off = settings.get_int('keyboard-off-lux');
+            kbdOff.subtitle = _('Lux. It comes back on below {on} lux, so it doesn\'t flicker when the room is right at the edge.')
+                .replace('{on}', String(Math.round(off * KEYBOARD_ON_SHARE)));
             if (lux !== null) {
-                const pct = Math.round(target(lux, readCurve(settings)) * 100);
-                reading.subtitle = `${Math.round(lux)} lux → ${pct}% ${_('brightness (before the slider)')}`;
+                room.subtitle = _('{lux} lux: {what}')
+                    .replace('{lux}', String(Math.round(lux))).replace('{what}', describeLux(lux));
+                roomValue.label = _('screen {percent}%')
+                    .replace('{percent}', String(Math.round(target(lux, readCurve(settings)) * 100)));
             }
-            graph.queue_draw();
+            editor.queue_draw();
         };
         settings.connect('changed', update);
-
-        // x: log(lux) from 0 to MAX_LUX; y: brightness 0–100%.
-        graph.set_draw_func((area, cr, w, h) => {
-            const fg = area.get_color();
-            const accent = Adw.StyleManager.get_default().get_accent_color_rgba();
-            const pad = 8;
-            const x = l => pad + (w - 2 * pad) * Math.log10(1 + l) / Math.log10(1 + MAX_LUX);
-            const y = b => h - pad - (h - 2 * pad) * b;
-            cr.setSourceRGBA(fg.red, fg.green, fg.blue, 0.15);
-            cr.setLineWidth(1);
-            for (const l of [10, 100, 1000, 10000]) {
-                cr.moveTo(x(l), pad);
-                cr.lineTo(x(l), h - pad);
-            }
-            cr.stroke();
-            const c = readCurve(settings);
-            cr.setSourceRGBA(accent.red, accent.green, accent.blue, 1);
-            cr.setLineWidth(2.5);
-            for (let i = 0; i <= 200; i++) {
-                const l = 10 ** (Math.log10(1 + MAX_LUX) * i / 200) - 1;
-                if (i === 0)
-                    cr.moveTo(x(l), y(target(l, c)));
-                else
-                    cr.lineTo(x(l), y(target(l, c)));
-            }
-            cr.stroke();
-            if (lux !== null) {
-                cr.setSourceRGBA(fg.red, fg.green, fg.blue, 0.9);
-                cr.arc(x(lux), y(target(lux, c)), 5, 0, 2 * Math.PI);
-                cr.fill();
-            }
-            cr.$dispose();
-        });
+        update();
 
         // The live reading: hold the sensor while this window is open.
         let proxy = null;
         new SensorProxy(Gio.DBus.system, 'net.hadess.SensorProxy', '/net/hadess/SensorProxy', (p, error) => {
             if (error || !p.HasAmbientLight) {
-                reading.subtitle = _('No light sensor found');
+                room.subtitle = _('No light sensor found');
                 return;
             }
             proxy = p;
