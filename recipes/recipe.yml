@@ -94,6 +94,8 @@ modules:
         # above 50% or plugged in, nothing open), and go back to sleep.
         - silverpanda-nightly.path
         - silverpanda-after-update.service
+        # The Framework 13 light sensor can wake up from sleep reading 0: reconnect it.
+        - silverpanda-als-after-sleep.service
 
   # files/system/etc/dracut.conf.d enables the TPM2 dracut module. Rebuild the
   # initramfs in the image so it can use TPM2 tokens before mounting root.
