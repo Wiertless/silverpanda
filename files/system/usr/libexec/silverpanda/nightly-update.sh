@@ -65,7 +65,7 @@ nobody_using() {
 # Only units whose ID has a visible launcher count: background helpers
 # (autostart-only like DiskUtilityNotify, NoDisplay like CalendarServer,
 # D-Bus services with no launcher) don't, and Assistant's window doesn't, as
-# its chats are saved.
+# its chats are saved, and Steam doesn't (the owner doesn't mind it closing).
 app_id() {
   local u=${1//\\x2d/-}
   case $u in
@@ -94,7 +94,7 @@ apps_open() {
     open=()
     while read -r unit; do
       id=$(app_id "$unit")
-      [[ -z $id || $id == *PandaAssistant* ]] && continue
+      [[ -z $id || $id == *PandaAssistant* || ${id,,} == steam || ${id,,} == com.valvesoftware.steam ]] && continue
       has_launcher "$id" "$home" && open+=("$id")
     done < <(systemctl --user -M "$user@" list-units --state=running --no-legend --plain 'app-*.scope' 'dbus-*@*.service' \
       2>/dev/null | awk '{print $1}')
