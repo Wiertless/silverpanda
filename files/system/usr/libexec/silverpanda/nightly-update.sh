@@ -64,8 +64,16 @@ nobody_using() {
 # or, when it starts over D-Bus (Ptyxis, Nautilus…), as dbus-:1.N-ID@M.service.
 # Only units whose ID has a visible launcher count: background helpers
 # (autostart-only like DiskUtilityNotify, NoDisplay like CalendarServer,
-# D-Bus services with no launcher) don't, and Assistant's window doesn't, as
-# its chats are saved.
+# D-Bus services with no launcher) don't. Neither do apps with nothing to lose
+# on a restart: Assistant (its chats are saved) and Steam (the owner doesn't
+# mind it being closed for a night's update).
+ignored_app() {
+  case ${1,,} in
+    *pandaassistant* | steam | com.valvesoftware.steam) return 0 ;;
+  esac
+  return 1
+}
+
 app_id() {
   local u=${1//\\x2d/-}
   case $u in
@@ -94,7 +102,8 @@ apps_open() {
     open=()
     while read -r unit; do
       id=$(app_id "$unit")
-      [[ -z $id || $id == *PandaAssistant* ]] && continue
+      [[ -z $id ]] && continue
+      ignored_app "$id" && continue
       has_launcher "$id" "$home" && open+=("$id")
     done < <(systemctl --user -M "$user@" list-units --state=running --no-legend --plain 'app-*.scope' 'dbus-*@*.service' \
       2>/dev/null | awk '{print $1}')
