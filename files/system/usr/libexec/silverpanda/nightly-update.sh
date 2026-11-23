@@ -207,6 +207,15 @@ fi
 settled=1
 settle || settled=
 level=$(battery)
+# A dry run reports every check, not only the first that fails.
+if [[ $check ]]; then
+  [[ $settled ]] && log "check: nothing else running"
+  log "check: battery ${level}%, $(on_mains && echo plugged in || echo on battery) (needs >${MIN_BATTERY}% or plugged in)"
+  if nobody_using; then log "check: nobody using it"; else log "check: in use (a session is unlocked and the lid is open)"; fi
+  apps_open || log "check: no apps open"
+  if b=$(shutdown_blocked); then log "check: asked not to shut down by $b"; else log "check: no shutdown locks"; fi
+  log "verdict:"
+fi
 if [[ ! $settled ]]; then
   log "still busy: trying again tomorrow night"
 elif ! on_mains && ((level <= MIN_BATTERY)); then
