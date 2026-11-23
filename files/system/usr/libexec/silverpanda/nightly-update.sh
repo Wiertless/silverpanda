@@ -1,14 +1,14 @@
 #!/usr/bin/bash
 # Woken at night by silverpanda-nightly.timer, which runs only while an image
 # update is staged (silverpanda-nightly.path). Restarts into the update when
-# the battery is above 50% or it's plugged in, nobody is using the laptop and
+# the battery is above 20% or it's plugged in, nobody is using the laptop and
 # no apps are open, then goes back to sleep. Otherwise it goes back to sleep
 # and tries again the next night. Nothing is downloaded at night: the base
 # image's update timers stage updates while the laptop is awake.
 set -uo pipefail
 
 MARKER=/var/lib/silverpanda/nightly-reboot
-MIN_BATTERY=50
+MIN_BATTERY=20
 
 log() { echo "silverpanda-nightly: $*"; }
 
