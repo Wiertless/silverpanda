@@ -167,13 +167,13 @@ print(", ".join(found)); sys.exit(0 if found else 1)'
 
 back_to_sleep() {
   local i
-  if [[ $check ]]; then
-    log "would go back to sleep"
-    return
-  fi
   for i in 1 2 3; do
     if ! nobody_using; then
       log "in use: staying awake"
+      return
+    fi
+    if [[ $check ]]; then
+      log "would go back to sleep"
       return
     fi
     # It was asleep before the timer woke it, so whatever held the system
