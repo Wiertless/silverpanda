@@ -172,7 +172,11 @@ else
   log "restarting into the staged update (battery ${level}%)"
   mkdir -p "$(dirname "$MARKER")"
   touch "$MARKER"
-  systemctl reboot
-  exit 0
+  # A job queued at wake can make systemd refuse the reboot for a moment.
+  if systemctl reboot || { sleep 15 && systemctl reboot; }; then
+    exit 0
+  fi
+  rm -f "$MARKER"
+  log "the restart was refused: trying again tomorrow night"
 fi
 back_to_sleep

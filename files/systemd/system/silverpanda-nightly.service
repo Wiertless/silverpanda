@@ -1,5 +1,7 @@
 [Unit]
 Description=Restart into a staged update at night and go back to sleep
+# Both start at wake; the light sensor's queued job made systemd refuse the reboot.
+After=silverpanda-als-after-sleep.service
 
 [Service]
 Type=oneshot
