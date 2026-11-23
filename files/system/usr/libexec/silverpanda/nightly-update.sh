@@ -5,7 +5,11 @@
 # no apps are open, then goes back to sleep. Otherwise it goes back to sleep
 # and tries again the next night. Nothing is downloaded at night: the base
 # image's update timers stage updates while the laptop is awake.
+# --check: say what it would do, without restarting or sleeping.
 set -uo pipefail
+
+check=
+[[ ${1:-} == --check ]] && check=1
 
 MARKER=/var/lib/silverpanda/nightly-reboot
 MIN_BATTERY=20
@@ -127,11 +131,49 @@ staged() {
     python3 -c 'import json,sys; sys.exit(0 if any(d.get("staged") for d in json.load(sys.stdin)["deployments"]) else 1)'
 }
 
+# What's still running: systemd jobs other than this run (whatever started at
+# the wake: the light sensor's reconnect, the Flatpak and rpm-ostree update
+# timers catching up, fstrim; a queued one makes systemd refuse the reboot, and
+# a restart would cut the others off), and an rpm-ostree transaction.
+busy() {
+  systemctl list-jobs --no-legend --plain 2>/dev/null | awk '$2 != "silverpanda-nightly.service" {print $2}'
+  rpm-ostree status --json 2>/dev/null |
+    python3 -c 'import json,sys; t=json.load(sys.stdin).get("transaction"); t and print("rpm-ostree")'
+}
+
+# Wait up to 15 minutes for that to finish.
+settle() {
+  local i b
+  for i in $(seq 90); do
+    b=$(busy)
+    [[ -z $b ]] && return 0
+    ((i == 1)) && log "waiting for: $(echo $b)"
+    [[ $check ]] && return 1
+    sleep 10
+  done
+  log "still running: $(echo $b)"
+  return 1
+}
+
+# Apps that asked not to be shut down (a download, a backup, an install).
+shutdown_blocked() {
+  busctl call --json=short org.freedesktop.login1 /org/freedesktop/login1 \
+    org.freedesktop.login1.Manager ListInhibitors 2>/dev/null |
+    python3 -c '
+import json, sys
+found = [f"{w[1]} ({w[2]})" for w in json.load(sys.stdin)["data"][0] if "shutdown" in w[0].split(":") and w[3] == "block"]
+print(", ".join(found)); sys.exit(0 if found else 1)'
+}
+
 back_to_sleep() {
   local i
   for i in 1 2 3; do
     if ! nobody_using; then
       log "in use: staying awake"
+      return
+    fi
+    if [[ $check ]]; then
+      log "would go back to sleep"
       return
     fi
     # It was asleep before the timer woke it, so whatever held the system
@@ -156,23 +198,36 @@ fi
 
 if ! staged; then
   log "nothing staged any more"
-  systemctl stop silverpanda-nightly.timer
+  [[ $check ]] || systemctl stop silverpanda-nightly.timer
   back_to_sleep
   exit 0
 fi
 
+# Checked after the wait, which can take a while.
+settled=1
+settle || settled=
 level=$(battery)
-if ! on_mains && ((level <= MIN_BATTERY)); then
+if [[ ! $settled ]]; then
+  log "still busy: trying again tomorrow night"
+elif ! on_mains && ((level <= MIN_BATTERY)); then
   log "battery at ${level}%: trying again tomorrow night"
 elif ! nobody_using; then
   log "in use: trying again tomorrow night"
 elif apps_open; then
   log "apps are open: trying again tomorrow night"
+elif blocker=$(shutdown_blocked); then
+  log "asked not to shut down by $blocker: trying again tomorrow night"
+elif [[ $check ]]; then
+  log "would restart into the staged update (battery ${level}%)"
 else
   log "restarting into the staged update (battery ${level}%)"
   mkdir -p "$(dirname "$MARKER")"
   touch "$MARKER"
-  systemctl reboot
-  exit 0
+  # One more try if a job queued in the meantime refuses it.
+  if systemctl reboot || { sleep 15 && systemctl reboot; }; then
+    exit 0
+  fi
+  rm -f "$MARKER"
+  log "the restart was refused: trying again tomorrow night"
 fi
 back_to_sleep
