@@ -87,6 +87,21 @@ has_launcher() {
   return 1
 }
 
+# Whether a unit's cgroup still runs a real program. A unit can outlive its app:
+# a media key starts G4Music as app-gnome-…g4music-0.scope with gsd-media-keys
+# itself inside, which stays after G4Music quits. Empty units, and ones holding
+# only GNOME's own helpers, don't count.
+runs_app() {
+  local pid
+  while read -r pid; do
+    case $(cat "/proc/$pid/comm" 2>/dev/null) in
+      "" | gsd-* | gnome-shell | gnome-session* | xdg-* | at-spi* | dbus-*) ;;
+      *) return 0 ;;
+    esac
+  done < <(find "/sys/fs/cgroup$1" -name cgroup.procs -exec cat {} + 2>/dev/null)
+  return 1
+}
+
 apps_open() {
   local user home unit id open
   for user in $(loginctl list-users --no-legend | awk '{print $2}'); do
@@ -95,7 +110,8 @@ apps_open() {
     while read -r unit; do
       id=$(app_id "$unit")
       [[ -z $id || $id == *PandaAssistant* || ${id,,} == steam || ${id,,} == com.valvesoftware.steam ]] && continue
-      has_launcher "$id" "$home" && open+=("$id")
+      has_launcher "$id" "$home" || continue
+      runs_app "$(systemctl --user -M "$user@" show -p ControlGroup --value "$unit" 2>/dev/null)" && open+=("$id")
     done < <(systemctl --user -M "$user@" list-units --state=running --no-legend --plain 'app-*.scope' 'dbus-*@*.service' \
       2>/dev/null | awk '{print $1}')
     if (( ${#open[@]} )); then
