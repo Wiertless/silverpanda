@@ -93,12 +93,12 @@ has_launcher() {
 # only GNOME's own helpers, don't count.
 runs_app() {
   local pid
-  for pid in $(find "/sys/fs/cgroup$1" -name cgroup.procs -exec cat {} + 2>/dev/null); do
+  while read -r pid; do
     case $(cat "/proc/$pid/comm" 2>/dev/null) in
       "" | gsd-* | gnome-shell | gnome-session* | xdg-* | at-spi* | dbus-*) ;;
       *) return 0 ;;
     esac
-  done
+  done < <(find "/sys/fs/cgroup$1" -name cgroup.procs -exec cat {} + 2>/dev/null)
   return 1
 }
 
