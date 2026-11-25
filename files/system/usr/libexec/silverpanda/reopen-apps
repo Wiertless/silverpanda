@@ -1,0 +1,17 @@
+#!/usr/bin/bash
+# Opens again the apps the night's update closed before restarting
+# (nightly-update.sh writes their IDs, one per line). Run once at login by
+# silverpanda-reopen-apps.service, or right away if the restart didn't happen.
+set -uo pipefail
+
+list=${XDG_STATE_HOME:-$HOME/.local/state}/silverpanda/reopen
+[[ -s $list ]] || exit 0
+# Taken first, so a second login (or a second run) doesn't open them twice.
+mv "$list" "$list.opening" || exit 0
+# Let the session finish starting, so the windows open on it.
+sleep 3
+while read -r id; do
+  [[ -n $id ]] || continue
+  gtk-launch "$id" >/dev/null 2>&1 || echo "silverpanda-reopen-apps: couldn't open $id" >&2
+done < "$list.opening"
+rm -f "$list.opening"
