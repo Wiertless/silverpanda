@@ -307,10 +307,64 @@ still_running() {
   runs_app "$(systemctl --user -M "$1@" show -p ControlGroup --value "$2" 2>/dev/null)"
 }
 
-wait_closed() {
+# The app's main process: the oldest of the topmost ancestors running the
+# same program as the processes in its unit (the one that was launched). It
+# can be outside the unit: Chromium moves its main process into a scope of its
+# own (app-org.chromium.Chromium-PID.scope) and leaves its helpers in the unit
+# GNOME started it in, so a signal to that unit misses the browser itself. A
+# Flatpak app's own process is found, not its bwrap sandbox.
+parent() {
+  local st
+  st=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+  st=${st##*) }
+  read -r _ st _ <<<"$st"
+  echo "$st"
+}
+
+started() {
+  local st f
+  st=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+  st=${st##*) }
+  read -ra f <<<"$st"
+  echo "${f[19]}"
+}
+
+main_pid() {
+  local cg pid p pp exe
+  cg=$(systemctl --user -M "$1@" show -p ControlGroup --value "$2" 2>/dev/null)
+  [[ -n $cg && -d /sys/fs/cgroup$cg ]] || return 0
+  while read -r pid; do
+    [[ $(cat "/proc/$pid/comm" 2>/dev/null) == bwrap ]] && continue
+    exe=$(readlink "/proc/$pid/exe" 2>/dev/null) || continue
+    p=$pid
+    while pp=$(parent "$p") && ((pp > 1)) && [[ $(readlink "/proc/$pp/exe" 2>/dev/null) == "$exe" ]]; do
+      p=$pp
+    done
+    echo "$(started "$p") $p"
+  done < <(find "/sys/fs/cgroup$cg" -name cgroup.procs -exec cat {} + 2>/dev/null) | sort -n | awk 'NR == 1 {print $2}'
+}
+
+alive() {
+  local pid
+  for pid in "$@"; do [[ -d /proc/$pid ]] && return 0; done
+  return 1
+}
+
+wait_closed_pid() {
   local i
-  for i in $(seq "$3"); do
-    still_running "$1" "$2" || return 0
+  for i in $(seq "$2"); do
+    [[ -d /proc/$1 ]] || return 0
+    sleep 1
+  done
+  return 1
+}
+
+# Until the app's main process is gone and its unit runs nothing.
+wait_closed() {
+  local user=$1 unit=$2 secs=$3 i
+  shift 3
+  for i in $(seq "$secs"); do
+    alive "$@" || still_running "$user" "$unit" || return 0
     sleep 1
   done
   return 1
@@ -319,13 +373,14 @@ wait_closed() {
 # Closes the CLOSE apps properly and writes each user's list for
 # silverpanda-reopen-apps.service. A GApplication (Nautilus, Ptyxis, Text
 # Editor…) quits through its quit action; anything else, or one that didn't,
-# gets what a logout sends: SIGTERM to every process in its unit (browsers
-# save their session on it, but need some seconds; a Flatpak app's own
-# processes get it, not only its sandbox). What's left after 30 s is stopped
-# with its unit (then it fails: that app may have lost something).
+# gets SIGTERM to its main process (see main_pid), what a logout sends:
+# browsers save their session on it and close their own helpers, but need
+# some seconds; then whatever is left in its unit gets SIGTERM too. What's
+# left after 30 s is stopped with its unit and killed (then it fails: that
+# app may have lost something).
 # Zed's database is copied first, as a fallback for its unsaved tabs.
 close_apps() {
-  local e user unit id home d forced=0
+  local e user unit id home d main forced=0
   for user in $(printf '%s\n' "${CLOSE[@]}" | awk '{print $1}' | sort -u); do
     home=$(getent passwd "$user" | cut -d: -f6)
     printf '%s\n' "${CLOSE[@]}" | awk -v u="$user" '$1 == u {print $3}' | awk '!seen[$0]++' |
@@ -340,11 +395,18 @@ close_apps() {
       done
     fi
     log "closing $id"
-    as_user "$user" timeout 5 gapplication action "$id" quit >/dev/null 2>&1 && wait_closed "$user" "$unit" 10 && continue
+    main=$(main_pid "$user" "$unit")
+    as_user "$user" timeout 5 gapplication action "$id" quit >/dev/null 2>&1 &&
+      wait_closed "$user" "$unit" 10 $main && continue
+    if [[ $main ]]; then
+      kill -TERM "$main" 2>/dev/null
+      wait_closed_pid "$main" 30
+    fi
     systemctl --user -M "$user@" kill --signal=TERM "$unit" 2>/dev/null
-    wait_closed "$user" "$unit" 30 && continue
+    wait_closed "$user" "$unit" 10 $main && continue
     log "$id didn't close in 30 s: stopping it"
     systemctl --user -M "$user@" stop "$unit" 2>/dev/null
+    [[ $main ]] && kill -KILL "$main" 2>/dev/null
     forced=1
   done
   ((forced == 0))
