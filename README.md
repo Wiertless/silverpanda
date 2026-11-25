@@ -125,7 +125,7 @@ Nothing is downloaded until it's needed: the toolbox is created the first time s
 
 ## Nightly updates
 
-When an image update is staged, the laptop wakes at night and restarts into it, then goes back to sleep. It restarts only when it's plugged in or above 20% battery, nobody is using it, and nothing open would lose work. Apps that bring their own work back (browsers with their tabs, Zed, VS Code, Sublime Text and Text Editor with unsaved text, Obsidian, Files, Settings, and Ptyxis when every tab is only its shell) are closed properly and opened again after you log in. Any other open app, or an app that tells GNOME it has unsaved documents, makes it wait for another night.
+When an image update is staged, the laptop wakes at night and restarts into it, then goes back to sleep. It restarts only when it's plugged in or above 20% battery, nobody is using it, and nothing open would lose work. Apps that bring their own work back (browsers with their tabs, Zed, VS Code, Sublime Text and Text Editor with unsaved text, Obsidian, Files, Settings, Vesktop, High Tide, Resources, and Ptyxis when every tab is only its shell) are closed properly and opened again after you log in. Any other open app, or an app that tells GNOME it has unsaved documents, makes it wait for another night.
 
 `silverpanda-nightly` shows and changes that:
 

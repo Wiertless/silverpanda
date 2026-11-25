@@ -106,7 +106,8 @@ runs_app() {
 # Apps that bring their own state back when closed properly and opened again:
 # browsers reopen their tabs; these editors keep unsaved text (Zed in its
 # database, VS Code and Sublime Text as hot-exit backups, Text Editor as
-# drafts; Obsidian saves as you type); the rest hold nothing a restart loses.
+# drafts; Obsidian saves as you type); the rest hold nothing a restart loses
+# (Vesktop's messages are on Discord's servers, High Tide only stops playing).
 # Ptyxis restores its tabs but not what runs in them (see terminal_idle).
 RESTORABLE=(
   helium firefox org.mozilla.firefox chromium-browser org.chromium.Chromium google-chrome com.google.Chrome
@@ -115,6 +116,7 @@ RESTORABLE=(
   sublime_text com.sublimetext.three
   org.gnome.Nautilus org.gnome.Settings org.gnome.Calendar org.gnome.Calculator org.gnome.clocks org.gnome.Weather
   org.gnome.Loupe org.gnome.Papers org.gnome.Evince org.gnome.Characters com.github.neithern.g4music
+  dev.vencord.Vesktop io.github.nokse22.high-tide net.nokyan.Resources
   org.gnome.Ptyxis
 )
 
