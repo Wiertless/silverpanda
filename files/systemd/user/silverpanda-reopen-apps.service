@@ -1,0 +1,11 @@
+[Unit]
+Description=Open the apps the night's update closed before restarting
+After=graphical-session.target
+ConditionPathExists=%S/silverpanda/reopen
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/silverpanda/reopen-apps
+
+[Install]
+WantedBy=graphical-session.target

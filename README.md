@@ -123,6 +123,17 @@ Nothing is downloaded until it's needed: the toolbox is created the first time s
 - Toolbox containers don't update with their image. To move to a newer toolchain, or from an older `zed` toolbox to the prebuilt image, run `toolbox rm --force zed` and restart Zed.
 - Layering `clang-tools-extra` on the host would conflict with the wrapper; install it in the toolbox instead.
 
+## Nightly updates
+
+When an image update is staged, the laptop wakes at night and restarts into it, then goes back to sleep. It restarts only when it's plugged in or above 20% battery, nobody is using it, and nothing open would lose work. Apps that bring their own work back (browsers with their tabs, Zed, VS Code, Sublime Text and Text Editor with unsaved text, Obsidian, Files, Settings, Vesktop, High Tide, Resources, and Ptyxis when every tab is only its shell) are closed properly and opened again after you log in. Any other open app, or an app that tells GNOME it has unsaved documents, makes it wait for another night.
+
+`silverpanda-nightly` shows and changes that:
+
+- `silverpanda-nightly status`: what it would do tonight, check by check
+- `silverpanda-nightly apps`: your open apps, and what it would do with each
+- `silverpanda-nightly test APP`: close an app the way the update does and open it again, to check your work survives
+- `silverpanda-nightly allow APP` / `block APP` / `reset APP`: let it close and reopen an app, never close it, or go back to the built-in choice (kept in `~/.config/silverpanda/restorable-apps`)
+
 ## Firewall
 
 The default firewalld zone is `public` (SSH, mDNS and DHCPv6 client only) instead of Fedora Workstation's zone, which accepts incoming connections on ports 1025–65535. Open what you need per service, e.g. `sudo firewall-cmd --permanent --add-service=kdeconnect && sudo firewall-cmd --reload`. The `tailscale0` interface is in the `trusted` zone, so the tailnet is not filtered; Tailscale ACLs control who can reach the machine. If you changed `/etc/firewalld/firewalld.conf` yourself, your copy is kept; set the zone with `sudo firewall-cmd --set-default-zone=public`.

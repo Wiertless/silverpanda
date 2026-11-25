@@ -1,0 +1,186 @@
+#!/usr/bin/bash
+# What the nightly update does with your open apps, and your choices for them.
+# The update closes apps that bring their own work back (browsers, editors that
+# keep unsaved text…) and opens them again after you log in; any other open app
+# makes it wait for another night. See /usr/libexec/silverpanda/nightly-lib.sh.
+set -uo pipefail
+
+# shellcheck source=../libexec/silverpanda/nightly-lib.sh
+. /usr/libexec/silverpanda/nightly-lib.sh
+
+usage() {
+  cat <<'EOF'
+Usage: silverpanda-nightly COMMAND
+
+  status      What the update would do tonight, check by check
+  apps        Your open apps, and what the update would do with each
+  choices     The apps you allowed or blocked
+  allow APP   Let the update close APP and open it again after you log in
+              (only for apps that bring your work back: try "test" first)
+  block APP   Never close APP: while it's open, the update waits
+  reset APP   Back to the built-in choice for APP
+  test APP    Close APP the way the update does and open it again, so you can
+              check your work survives (have something unsaved open in it)
+
+APP is an app's name or ID, as "apps" shows it ("Zed", "helium").
+EOF
+}
+
+me=$(id -un)
+home=$HOME
+file=$home/$CHOICES
+
+# An app ID from a name or ID: an exact ID first, else the launchers whose ID
+# or name contains it (ignoring case). Exactly one must match.
+resolve() {
+  local q=$1 f id name matches=()
+  if launcher "$q" "$home" >/dev/null; then
+    echo "$q"
+    return 0
+  fi
+  for f in /usr/share/applications/*.desktop /usr/local/share/applications/*.desktop \
+    /var/lib/flatpak/exports/share/applications/*.desktop "$home"/.local/share/applications/*.desktop \
+    "$home"/.local/share/flatpak/exports/share/applications/*.desktop; do
+    [[ -f $f ]] || continue
+    grep -qiE '^(NoDisplay|Hidden)=true' "$f" && continue
+    id=$(basename "$f" .desktop)
+    name=$(grep -m1 '^Name=' "$f" | cut -d= -f2-)
+    if [[ ${id,,} == *"${q,,}"* || ${name,,} == *"${q,,}"* ]]; then
+      matches+=("$id")
+    fi
+  done
+  mapfile -t matches < <(printf '%s\n' "${matches[@]}" | awk 'NF && !seen[$0]++')
+  case ${#matches[@]} in
+    1) echo "${matches[0]}" ;;
+    0) echo "No app called '$q'." >&2; return 1 ;;
+    *)
+      echo "'$q' could be:" >&2
+      for id in "${matches[@]}"; do echo "  $(app_name "$id" "$home") ($id)" >&2; done
+      echo "Use its ID." >&2
+      return 1
+      ;;
+  esac
+}
+
+# Writes the choice for an app: allow, block, or none.
+set_choice() {
+  local id=$1 c=$2 tmp
+  mkdir -p "$(dirname "$file")"
+  tmp=$(mktemp "$file.XXXXXX") || return 1
+  if [[ -f $file ]]; then
+    awk -v id="$id" '{ l = $0; sub(/#.*/, "", l); gsub(/[[:space:]]/, "", l) } l != id && l != "-" id' "$file" > "$tmp"
+  else
+    echo "# Apps the nightly update may close and reopen (one ID per line), or never close (-ID)." > "$tmp"
+  fi
+  case $c in
+    allow) echo "$id" >> "$tmp" ;;
+    block) echo "-$id" >> "$tmp" ;;
+  esac
+  mv "$tmp" "$file"
+}
+
+why() {
+  local id=$1
+  case $(choice "$home" "$id") in
+    allow) echo "you allowed it" ;;
+    block) echo "you blocked it" ;;
+    *)
+      if [[ $id == org.gnome.Ptyxis ]] && builtin_restorable "$id"; then
+        terminal_idle "$me" && echo "every tab is only its shell" || echo "a tab is running something"
+      elif builtin_restorable "$id"; then
+        echo "it brings its work back"
+      else
+        echo "not known to bring its work back"
+      fi
+      ;;
+  esac
+}
+
+cmd=${1:-}
+[[ $# -gt 0 ]] && shift
+case $cmd in
+  status)
+    exec /usr/libexec/silverpanda/nightly-update.sh --check
+    ;;
+  apps)
+    classify
+    if ((${#CLOSE[@]} + ${#BLOCKING[@]} == 0)); then
+      echo "No apps open."
+      exit 0
+    fi
+    for e in "${CLOSE[@]}"; do
+      read -r user _ id <<<"$e"
+      [[ $user == "$me" ]] && echo "closes and reopens: $(app_name "$id" "$home") ($id): $(why "$id")"
+    done
+    for e in "${BLOCKING[@]}"; do
+      user=${e%%:*} id=${e#*:}
+      [[ $user == "$me" ]] && echo "makes it wait:      $(app_name "$id" "$home") ($id): $(why "$id")"
+    done
+    if u=$(unsaved_work); then echo "Unsaved work reported to GNOME: $u (the update waits)"; fi
+    ;;
+  choices)
+    if [[ ! -s $file ]] || ! grep -qvE '^[[:space:]]*(#|$)' "$file"; then
+      echo "No choices: the built-in list decides."
+      exit 0
+    fi
+    grep -vE '^[[:space:]]*(#|$)' "$file" | sed 's/#.*//; s/[[:space:]]//g' | while read -r l; do
+      if [[ $l == -* ]]; then echo "blocked: $(app_name "${l#-}" "$home") (${l#-})"; else echo "allowed: $(app_name "$l" "$home") ($l)"; fi
+    done
+    ;;
+  allow | block | reset)
+    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    id=$(resolve "$1") || exit 1
+    case $cmd in
+      allow)
+        set_choice "$id" allow
+        echo "The update may now close $(app_name "$id" "$home") and open it again after you log in."
+        builtin_restorable "$id" || echo "Make sure it brings your work back: silverpanda-nightly test $id"
+        ;;
+      block)
+        set_choice "$id" block
+        echo "The update won't close $(app_name "$id" "$home"): while it's open, the update waits."
+        ;;
+      reset)
+        set_choice "$id" none
+        if builtin_restorable "$id"; then
+          echo "$(app_name "$id" "$home"): back to the built-in choice (closed and reopened)."
+        else
+          echo "$(app_name "$id" "$home"): back to the built-in choice (the update waits while it's open)."
+        fi
+        ;;
+    esac
+    ;;
+  test)
+    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    id=$(resolve "$1") || exit 1
+    name=$(app_name "$id" "$home")
+    unit=$(systemctl --user list-units --state=running --no-legend --plain 'app-*.scope' 'dbus-*@*.service' 2>/dev/null |
+      awk '{print $1}' | while read -r u; do [[ $(app_id "$u") == "$id" ]] && still_running "$me" "$u" && echo "$u"; done | head -1)
+    if [[ -z $unit ]]; then
+      echo "$name isn't open. Open it, leave some unsaved work in it, and run this again."
+      exit 1
+    fi
+    echo "Closing $name the way the update does, then opening it again…"
+    # Only this app: the list the update writes for the next login gets just it.
+    CLOSE=("$me $unit $id")
+    if ! close_apps; then
+      echo "$name didn't close by itself and had to be stopped, which can lose work. Block it:"
+      echo "  silverpanda-nightly block $id"
+      /usr/libexec/silverpanda/reopen-apps
+      exit 1
+    fi
+    /usr/libexec/silverpanda/reopen-apps
+    if restorable "$home" "$id"; then
+      echo "Is your work back? If not, keep the update from closing it: silverpanda-nightly block $id"
+    else
+      echo "Is your work back? Then the update can close it: silverpanda-nightly allow $id"
+    fi
+    ;;
+  "" | -h | --help | help)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac
