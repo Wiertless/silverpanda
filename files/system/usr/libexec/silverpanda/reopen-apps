@@ -8,10 +8,62 @@ list=${XDG_STATE_HOME:-$HOME/.local/state}/silverpanda/reopen
 [[ -s $list ]] || exit 0
 # Taken first, so a second login (or a second run) doesn't open them twice.
 mv "$list" "$list.opening" || exit 0
+
+# Chromium-based browsers reopen their last session with this switch,
+# whatever their "On startup" setting says.
+CHROMIUM=(helium chromium-browser org.chromium.Chromium google-chrome com.google.Chrome brave-browser com.brave.Browser)
+
+chromium() {
+  local c
+  for c in "${CHROMIUM[@]}"; do [[ $1 == "$c" ]] && return 0; done
+  return 1
+}
+
+desktop_file() {
+  local d
+  for d in /usr/share/applications /usr/local/share/applications /var/lib/flatpak/exports/share/applications \
+    "$HOME/.local/share/applications" "$HOME/.local/share/flatpak/exports/share/applications"; do
+    [[ -f $d/$1.desktop ]] && { echo "$d/$1.desktop"; return 0; }
+  done
+  return 1
+}
+
+# The app's command from its launcher, without the %U-style field codes and
+# Flatpak's @@ file-forwarding markers.
+command_of() {
+  local f exec w words=()
+  f=$(desktop_file "$1") || return 1
+  exec=$(grep -m1 '^Exec=' "$f" | cut -d= -f2-)
+  read -ra words <<<"$exec"
+  for w in "${words[@]}"; do
+    [[ $w == %? || $w == @@* ]] || echo "$w"
+  done
+}
+
+# Each app in its own scope, named as GNOME names the apps it starts
+# (app-gnome-ID-N.scope): what this service starts would otherwise be stopped
+# when it finishes, and the nightly update recognizes an app by that name.
+n=0
+launch() {
+  local id=$1
+  shift
+  n=$((n + 1))
+  systemd-run --user --scope --quiet --collect --unit="app-gnome-$(systemd-escape "$id")-$$$n" -- "$@" \
+    >/dev/null 2>&1 &
+}
+
 # Let the session finish starting, so the windows open on it.
 sleep 3
 while read -r id; do
   [[ -n $id ]] || continue
-  gtk-launch "$id" >/dev/null 2>&1 || echo "silverpanda-reopen-apps: couldn't open $id" >&2
+  if chromium "$id" && mapfile -t cmd < <(command_of "$id") && ((${#cmd[@]})); then
+    launch "$id" "${cmd[@]}" --restore-last-session
+  else
+    # gtk-launch starts a D-Bus app (Files, Settings…) over D-Bus, outside
+    # this scope; anything else runs inside it.
+    launch "$id" gtk-launch "$id"
+  fi
 done < "$list.opening"
+# The scopes outlive this script; give systemd-run a moment to move each in.
+sleep 2
 rm -f "$list.opening"
